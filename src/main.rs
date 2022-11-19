@@ -1,8 +1,11 @@
+use std::default::Default;
+
 use bezierflattener::CBezierFlattener;
 
-use crate::bezierflattener::{CFlatteningSink, GpPointR, HRESULT, S_OK, CBezier};
+use crate::{bezierflattener::{CFlatteningSink, GpPointR, HRESULT, S_OK, CBezier}, tri_rasterize::rasterize_to_mask};
 
 mod bezierflattener;
+mod tri_rasterize;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Winding {
@@ -73,19 +76,19 @@ impl Default for StrokeStyle {
         }
     }
 }
+#[derive(Debug)]
+pub struct Vertex {
+    x: f32,
+    y: f32
+}
 
 /// A helper struct used for constructing a `Path`.
 pub struct PathBuilder {
     path: Path,
+    vertices: Vec<Vertex>
 }
 
-impl From<Path> for PathBuilder {
-    fn from(path: Path) -> Self {
-        PathBuilder {
-            path
-        }
-    }
-}
+
 
 impl PathBuilder {
     pub fn new() -> PathBuilder {
@@ -94,7 +97,15 @@ impl PathBuilder {
                 ops: Vec::new(),
                 winding: Winding::NonZero,
             },
+            vertices: Vec::new()
         }
+    }
+
+    pub fn push_tri(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) {
+        self.vertices.push(Vertex { x: x1, y: y1});
+        self.vertices.push(Vertex { x: x2, y: y2});
+        self.vertices.push(Vertex { x: x3, y: y3});
+
     }
 
     pub fn quad(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32, x4: f32, y4: f32) {
@@ -103,6 +114,9 @@ impl PathBuilder {
         self.line_to(x3, y3);
         self.line_to(x4, y4);
         self.close();
+
+        self.push_tri(x1, y1, x2, y2, x3, y3);
+        self.push_tri(x3, y3, x4, y4, x1, y1);
     }
 
     pub fn tri(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) {
@@ -110,6 +124,8 @@ impl PathBuilder {
         self.line_to(x2, y2);
         self.line_to(x3, y3);
         self.close();
+
+        self.push_tri(x1, y1, x2, y2, x3, y3);
     }
 
     /// Moves the current point to `x`, `y`
@@ -130,14 +146,6 @@ impl PathBuilder {
             .push(PathOp::QuadTo(Point::new(cx, cy), Point::new(x, y)))
     }
 
-    /// Adds a rect to the path
-    pub fn rect(&mut self, x: f32, y: f32, width: f32, height: f32) {
-        self.move_to(x, y);
-        self.line_to(x + width, y);
-        self.line_to(x + width, y + height);
-        self.line_to(x, y + height);
-        self.close();
-    }
 
     pub fn arc_wedge(&mut self, c: Point, radius: f32, a: Vector, b: Vector) {
         self.move_to(c.x + a.x * radius, c.y + a.y * radius);
@@ -162,8 +170,8 @@ impl PathBuilder {
     }
 
     /// Completes the current path
-    pub fn finish(self) -> Path {
-        self.path
+    pub fn finish(self) -> (Path, Vec<Vertex>) {
+        (self.path, self.vertices)
     }
 }
 
@@ -248,6 +256,60 @@ fn arc_segment(path: &mut PathBuilder, xc: f32, yc: f32, radius: f32, a: Vector,
     );
 }
 
+fn arc_segment_tri(path: &mut PathBuilder, xc: f32, yc: f32, radius: f32, a: Vector, b: Vector) {
+    let r_sin_a = radius * a.y;
+    let r_cos_a = radius * a.x;
+    let r_sin_b = radius * b.y;
+    let r_cos_b = radius * b.x;
+
+
+    /* bisect the angle between 'a' and 'b' with 'mid' */
+    let mut mid = a + b;
+    mid /= mid.length();
+
+    /* bisect the angle between 'a' and 'mid' with 'mid2' this is parallel to a
+     * line with angle (B - A)/4 */
+    let mid2 = a + mid;
+
+    let h = (4. / 3.) * dot(perp(a), mid2) / dot(a, mid2);
+
+    let mut last_point = GpPointR { x: (xc + r_cos_a) as f64, y: (yc + r_sin_a) as f64 };
+    
+
+    struct Target<'a> { last_point: GpPointR, xc: f32, yc: f32, path: &'a mut PathBuilder }
+    impl<'a> CFlatteningSink for Target<'a> {
+        fn AcceptPointAndTangent(&mut self,
+        pt: &GpPointR,
+            // The point
+        vec: &GpPointR,
+            // The tangent there
+        fLast: bool
+            // Is this the last point on the curve?
+        ) -> HRESULT {
+        todo!()
+    }
+
+        fn AcceptPoint(&mut self,
+            pt: &GpPointR,
+                // The point
+            t: f64,
+                // Parameter we're at
+            fAborted: &mut bool) -> HRESULT {
+                self.path.push_tri(self.last_point.x as f32, self.last_point.y as f32, pt.x as f32, pt.y as f32, self.xc, self.yc);
+                self.last_point = pt.clone();
+        return S_OK;
+    }
+    }
+    let bezier = CBezier::new([GpPointR { x: (xc + r_cos_a) as f64, y: (yc + r_sin_a) as f64,  },
+        GpPointR { x: (xc + r_cos_a - h * r_sin_a) as f64, y: (yc + r_sin_a + h * r_cos_a) as f64, },
+        GpPointR { x: (xc + r_cos_b + h * r_sin_b) as f64, y: (yc + r_sin_b - h * r_cos_b) as f64, },
+        GpPointR { x: (xc + r_cos_b) as f64, y: (yc + r_sin_b) as f64, }]);
+        let mut t = Target{ last_point, xc, yc, path };
+    let mut f = CBezierFlattener::new(&bezier, &mut t, 0.1);
+    f.Flatten(false);
+
+}
+
 /* The angle between the vectors must be <= pi */
 fn bisect(a: Vector, b: Vector) -> Vector {
     let mut mid;
@@ -277,6 +339,9 @@ fn arc(path: &mut PathBuilder, xc: f32, yc: f32, radius: f32, a: Vector, b: Vect
     /* construct the arc using two curve segments */
     arc_segment(path, xc, yc, radius, a, mid_v);
     arc_segment(path, xc, yc, radius, mid_v, b);
+
+    arc_segment_tri(path, xc, yc, radius, a, mid_v);
+    arc_segment_tri(path, xc, yc, radius, mid_v, b);
 }
 
 fn join_round(path: &mut PathBuilder, center: Point, a: Vector, b: Vector, radius: f32) {
@@ -407,7 +472,7 @@ fn join_line(
     }
 }
 
-pub fn stroke_to_path(path: &Path, style: &StrokeStyle) -> Path {
+pub fn stroke_to_path(path: &Path, style: &StrokeStyle) -> (Path, Vec<Vertex>) {
     let mut stroked_path = PathBuilder::new();
 
     if style.width <= 0. {
@@ -494,14 +559,48 @@ pub fn stroke_to_path(path: &Path, style: &StrokeStyle) -> Path {
 }
 
 
+fn write_image(data: &[u8], path: &str, width: u32, height: u32) {
+    use std::path::Path;
+    use std::fs::File;
+    use std::io::BufWriter;
+
+    /*let mut png_data: Vec<u8> = vec![0; (width * height * 3) as usize];
+    let mut i = 0;
+    for pixel in data {
+        png_data[i] = ((pixel >> 16) & 0xff) as u8;
+        png_data[i + 1] = ((pixel >> 8) & 0xff) as u8;
+        png_data[i + 2] = ((pixel >> 0) & 0xff) as u8;
+        i += 3;
+    }*/
+
+
+    let path = Path::new(path);
+    let file = File::create(path).unwrap();
+    let w = &mut BufWriter::new(file);
+
+    let mut encoder = png::Encoder::new(w, width, height); // Width is 2 pixels and height is 1.
+    encoder.set_color(png::ColorType::Grayscale);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header().unwrap();
+
+    writer.write_image_data(&data).unwrap(); // Save
+}
+
+
 // How do we handle transformed paths?
 fn main() {
     let mut p = PathBuilder::new();
-    p.move_to(0., 0.);
-    p.line_to(0., 100.);
-    let path = p.finish();
-    let stroked = stroke_to_path(&path, &StrokeStyle::default());
+    p.move_to(10., 10.);
+    p.line_to(100., 100.);
+    p.line_to(100., 10.);
 
+    let path = p.finish().0;
+    let stroked = stroke_to_path(&path, &StrokeStyle{cap: LineCap::Round, width: 10., ..Default::default()});
+    dbg!(&stroked);
+
+    let mask = rasterize_to_mask(&stroked.1, 200, 200);
+    write_image(&mask,"out.png", 200, 200);
+/* 
     struct Target;
     impl CFlatteningSink for Target {
         fn AcceptPointAndTangent(&mut self,
@@ -531,6 +630,6 @@ fn main() {
         GpPointR { x: 100., y: 100. }]);
         let mut t = Target{};
     let mut f = CBezierFlattener::new(&bezier, &mut t, 0.1);
-    f.Flatten(false);
+    f.Flatten(false);*/
 
 }
