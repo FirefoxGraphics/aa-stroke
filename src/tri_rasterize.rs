@@ -179,9 +179,9 @@ pub fn rasterize_to_mask(vertices: &[OutputVertex], width: u32, height: u32) -> 
             [&vertices[n], &vertices[n+1], &vertices[n+2]];
 
         let tri = Triangle { v: [
-            Vertex { x: tri[0].x, y: tri[0].y, coverage: 1.},
-            Vertex { x: tri[1].x, y: tri[1].y, coverage: 1.},
-            Vertex { x: tri[2].x, y: tri[2].y, coverage: 1.}
+            Vertex { x: tri[0].x, y: tri[0].y, coverage: tri[0].coverage},
+            Vertex { x: tri[1].x, y: tri[1].y, coverage: tri[1].coverage},
+            Vertex { x: tri[2].x, y: tri[2].y, coverage: tri[2].coverage}
             ]
         };
         rast_triangle(&mut mask, width as usize, height as usize, &tri);

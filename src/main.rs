@@ -79,13 +79,15 @@ impl Default for StrokeStyle {
 #[derive(Debug)]
 pub struct Vertex {
     x: f32,
-    y: f32
+    y: f32,
+    coverage: f32
 }
 
 /// A helper struct used for constructing a `Path`.
 pub struct PathBuilder {
     path: Path,
-    vertices: Vec<Vertex>
+    vertices: Vec<Vertex>,
+    transform: Transform
 }
 
 
@@ -97,14 +99,15 @@ impl PathBuilder {
                 ops: Vec::new(),
                 winding: Winding::NonZero,
             },
-            vertices: Vec::new()
+            vertices: Vec::new(),
+            transform: Default::default()
         }
     }
 
     pub fn push_tri(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) {
-        self.vertices.push(Vertex { x: x1, y: y1});
-        self.vertices.push(Vertex { x: x2, y: y2});
-        self.vertices.push(Vertex { x: x3, y: y3});
+        self.vertices.push(Vertex { x: x1, y: y1, coverage: 1.});
+        self.vertices.push(Vertex { x: x2, y: y2, coverage: 1.});
+        self.vertices.push(Vertex { x: x3, y: y3, coverage: 1.});
 
     }
 
@@ -119,6 +122,17 @@ impl PathBuilder {
         self.push_tri(x3, y3, x4, y4, x1, y1);
     }
 
+    pub fn ramp(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32, x4: f32, y4: f32) {
+        self.vertices.push(Vertex { x: x1, y: y1, coverage: 1.});
+        self.vertices.push(Vertex { x: x2, y: y2, coverage: 0.});
+        self.vertices.push(Vertex { x: x3, y: y3, coverage: 0.});
+
+        self.vertices.push(Vertex { x: x3, y: y3, coverage: 0.});
+        self.vertices.push(Vertex { x: x4, y: y4, coverage: 1.});
+        self.vertices.push(Vertex { x: x1, y: y1, coverage: 1.});
+    }
+
+    // first edge is outside
     pub fn tri(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) {
         self.move_to(x1, y1);
         self.line_to(x2, y2);
@@ -279,15 +293,15 @@ fn arc_segment_tri(path: &mut PathBuilder, xc: f32, yc: f32, radius: f32, a: Vec
     struct Target<'a> { last_point: GpPointR, xc: f32, yc: f32, path: &'a mut PathBuilder }
     impl<'a> CFlatteningSink for Target<'a> {
         fn AcceptPointAndTangent(&mut self,
-        pt: &GpPointR,
-            // The point
-        vec: &GpPointR,
-            // The tangent there
-        fLast: bool
-            // Is this the last point on the curve?
-        ) -> HRESULT {
-        todo!()
-    }
+            pt: &GpPointR,
+                // The point
+            vec: &GpPointR,
+                // The tangent there
+            fLast: bool
+                // Is this the last point on the curve?
+            ) -> HRESULT {
+            todo!()
+        }
 
         fn AcceptPoint(&mut self,
             pt: &GpPointR,
@@ -295,10 +309,10 @@ fn arc_segment_tri(path: &mut PathBuilder, xc: f32, yc: f32, radius: f32, a: Vec
             t: f64,
                 // Parameter we're at
             fAborted: &mut bool) -> HRESULT {
-                self.path.push_tri(self.last_point.x as f32, self.last_point.y as f32, pt.x as f32, pt.y as f32, self.xc, self.yc);
-                self.last_point = pt.clone();
-        return S_OK;
-    }
+            self.path.push_tri(self.last_point.x as f32, self.last_point.y as f32, pt.x as f32, pt.y as f32, self.xc, self.yc);
+            self.last_point = pt.clone();
+            return S_OK;
+        }
     }
     let bezier = CBezier::new([GpPointR { x: (xc + r_cos_a) as f64, y: (yc + r_sin_a) as f64,  },
         GpPointR { x: (xc + r_cos_a - h * r_sin_a) as f64, y: (yc + r_sin_a + h * r_cos_a) as f64, },
@@ -505,15 +519,46 @@ pub fn stroke_to_path(path: &Path, style: &StrokeStyle) -> (Path, Vec<Vertex>) {
                         } else {
                             join_line(&mut stroked_path, style, cur_pt, last_normal, normal);
                         }
+                        if (true) {
+                            stroked_path.ramp(                        
 
-                        stroked_path.quad(
-                            cur_pt.x + normal.x * half_width,
-                            cur_pt.y + normal.y * half_width,
-                            pt.x + normal.x * half_width, pt.y + normal.y * half_width,
-                            pt.x + -normal.x * half_width, pt.y + -normal.y * half_width,
-                            cur_pt.x - normal.x * half_width,
-                            cur_pt.y - normal.y * half_width,
-                        );
+                                pt.x + normal.x * (half_width - 0.5), 
+                                pt.y + (normal.y * half_width - 0.5),
+                                pt.x + normal.x * (half_width + 0.5),
+                                pt.y + normal.y * (half_width + 0.5),
+                                cur_pt.x + normal.x * (half_width + 0.5),
+                                cur_pt.y + normal.y * (half_width + 0.5),
+                                cur_pt.x + normal.x * (half_width - 0.5),
+                                cur_pt.y + normal.y * (half_width - 0.5),
+                            );
+                            stroked_path.quad(
+                                cur_pt.x + normal.x * (half_width - 0.5),
+                                cur_pt.y + normal.y * (half_width - 0.5),
+                                pt.x + normal.x * (half_width - 0.5), pt.y + normal.y * (half_width - 0.5),
+                                pt.x + -normal.x * (half_width - 0.5), pt.y + -normal.y * (half_width - 0.5),
+                                cur_pt.x - normal.x * (half_width - 0.5),
+                                cur_pt.y - normal.y * (half_width - 0.5),
+                            );
+                            stroked_path.ramp(                        
+                                cur_pt.x - normal.x * (half_width - 0.5),
+                                cur_pt.y - normal.y * (half_width - 0.5),
+                                cur_pt.x - normal.x * (half_width + 0.5),
+                                cur_pt.y - normal.y * (half_width + 0.5),
+                                pt.x - normal.x * (half_width + 0.5),
+                                pt.y - normal.y * (half_width + 0.5),
+                                pt.x - normal.x * (half_width - 0.5), 
+                                pt.y - (normal.y * half_width - 0.5),
+                            );
+                        } else {
+                            stroked_path.quad(
+                                cur_pt.x + normal.x * half_width,
+                                cur_pt.y + normal.y * half_width,
+                                pt.x + normal.x * half_width, pt.y + normal.y * half_width,
+                                pt.x + -normal.x * half_width, pt.y + -normal.y * half_width,
+                                cur_pt.x - normal.x * half_width,
+                                cur_pt.y - normal.y * half_width,
+                            );
+                        }
 
                         last_normal = normal;
 
@@ -592,10 +637,14 @@ fn main() {
     let mut p = PathBuilder::new();
     p.move_to(10., 10.);
     p.line_to(100., 100.);
-    p.line_to(100., 10.);
+    p.line_to(110., 10.);
 
     let path = p.finish().0;
-    let stroked = stroke_to_path(&path, &StrokeStyle{cap: LineCap::Round, width: 10., ..Default::default()});
+    let stroked = stroke_to_path(&path, &StrokeStyle{
+        cap: LineCap::Round, 
+        join: LineJoin::Round, 
+        width: 10.,
+         ..Default::default()});
     dbg!(&stroked);
 
     let mask = rasterize_to_mask(&stroked.1, 200, 200);
