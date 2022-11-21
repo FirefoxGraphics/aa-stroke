@@ -87,7 +87,8 @@ pub struct Vertex {
 pub struct PathBuilder {
     path: Path,
     vertices: Vec<Vertex>,
-    transform: Transform
+    transform: Transform,
+    aa: bool
 }
 
 
@@ -100,7 +101,8 @@ impl PathBuilder {
                 winding: Winding::NonZero,
             },
             vertices: Vec::new(),
-            transform: Default::default()
+            transform: Default::default(),
+            aa: true
         }
     }
 
@@ -288,9 +290,10 @@ fn arc_segment_tri(path: &mut PathBuilder, xc: f32, yc: f32, radius: f32, a: Vec
     let h = (4. / 3.) * dot(perp(a), mid2) / dot(a, mid2);
 
     let mut last_point = GpPointR { x: (xc + r_cos_a) as f64, y: (yc + r_sin_a) as f64 };
-    
+    let initial_normal = GpPointR { x: a.x as f64, y: a.y as f64 };
 
-    struct Target<'a> { last_point: GpPointR, xc: f32, yc: f32, path: &'a mut PathBuilder }
+
+    struct Target<'a> { last_point: GpPointR, last_normal: GpPointR, xc: f32, yc: f32, path: &'a mut PathBuilder }
     impl<'a> CFlatteningSink for Target<'a> {
         fn AcceptPointAndTangent(&mut self,
             pt: &GpPointR,
@@ -300,7 +303,36 @@ fn arc_segment_tri(path: &mut PathBuilder, xc: f32, yc: f32, radius: f32, a: Vec
             fLast: bool
                 // Is this the last point on the curve?
             ) -> HRESULT {
-            todo!()
+                if self.path.aa {
+                    let len = vec.Norm();
+                    let normal = *vec/len;
+                    let normal = GpPointR { x: -normal.y, y: normal.x };
+                    // FIXME: we probably need more width here because
+                    // the normals are not perpendicular with the edge
+                    let width = 0.5; 
+
+                    self.path.ramp(
+                    (pt.x - normal.x * width) as f32, 
+                    (pt.y - normal.y * width) as f32,
+                    (pt.x + normal.x * width) as f32, 
+                    (pt.y + normal.y * width) as f32,
+                    (self.last_point.x + self.last_normal.x * width) as f32,
+                    (self.last_point.y + self.last_normal.y * width) as f32, 
+                    (self.last_point.x - self.last_normal.x * width) as f32,
+                    (self.last_point.y - self.last_normal.y * width) as f32, );
+                    self.path.push_tri(
+                        (self.last_point.x - self.last_normal.x * 0.5) as f32,
+                        (self.last_point.y - self.last_normal.y * 0.5) as f32, 
+                        (pt.x - normal.x * 0.5) as f32, 
+                        (pt.y - normal.y * 0.5) as f32,
+                         self.xc, self.yc);
+                    self.last_normal = normal;
+
+                } else {
+                    self.path.push_tri(self.last_point.x as f32, self.last_point.y as f32, pt.x as f32, pt.y as f32, self.xc, self.yc);
+                }
+                self.last_point = pt.clone();
+                return S_OK;
         }
 
         fn AcceptPoint(&mut self,
@@ -318,9 +350,9 @@ fn arc_segment_tri(path: &mut PathBuilder, xc: f32, yc: f32, radius: f32, a: Vec
         GpPointR { x: (xc + r_cos_a - h * r_sin_a) as f64, y: (yc + r_sin_a + h * r_cos_a) as f64, },
         GpPointR { x: (xc + r_cos_b + h * r_sin_b) as f64, y: (yc + r_sin_b - h * r_cos_b) as f64, },
         GpPointR { x: (xc + r_cos_b) as f64, y: (yc + r_sin_b) as f64, }]);
-        let mut t = Target{ last_point, xc, yc, path };
+    let mut t = Target{ last_point, last_normal: initial_normal, xc, yc, path };
     let mut f = CBezierFlattener::new(&bezier, &mut t, 0.1);
-    f.Flatten(false);
+    f.Flatten(true);
 
 }
 
@@ -394,9 +426,28 @@ fn bevel(
     s2_normal: Vector,
 ) {
     let offset = style.width / 2.;
-    dest.tri(pt.x + s1_normal.x * offset, pt.y + s1_normal.y * offset,
-          pt.x + s2_normal.x * offset, pt.y + s2_normal.y * offset,
-          pt.x, pt.y);
+    if dest.aa {
+        let width = 2.;
+        let offset = offset - width / 2.;
+        //XXX: we should be able to just bisect the two norms to get this
+        let diff = (s2_normal - s1_normal).normalize();
+        let edge_normal = perp(diff);
+
+        dest.tri(pt.x + s1_normal.x * offset, pt.y + s1_normal.y * offset,
+            pt.x + s2_normal.x * offset, pt.y + s2_normal.y * offset,
+            pt.x, pt.y);
+            /* 
+        dest.ramp(
+            pt.x + s2_normal.x * offset, pt.y + s2_normal.y * offset,
+            pt.x + s2_normal.x * (offset + width), pt.y + s2_normal.y * (offset + width),
+            pt.x + s1_normal.x * (offset + width), pt.y + s1_normal.y * (offset + width),
+            pt.x + s1_normal.x * offset, pt.y + s1_normal.y * offset,
+                );*/
+    } else {
+        dest.tri(pt.x + s1_normal.x * offset, pt.y + s1_normal.y * offset,
+            pt.x + s2_normal.x * offset, pt.y + s2_normal.y * offset,
+            pt.x, pt.y);
+    }
 }
 
 /* given a normal rotate the vector 90 degrees to the right clockwise
@@ -519,9 +570,8 @@ pub fn stroke_to_path(path: &Path, style: &StrokeStyle) -> (Path, Vec<Vertex>) {
                         } else {
                             join_line(&mut stroked_path, style, cur_pt, last_normal, normal);
                         }
-                        if (true) {
+                        if stroked_path.aa {
                             stroked_path.ramp(                        
-
                                 pt.x + normal.x * (half_width - 0.5), 
                                 pt.y + (normal.y * half_width - 0.5),
                                 pt.x + normal.x * (half_width + 0.5),
@@ -642,8 +692,8 @@ fn main() {
     let path = p.finish().0;
     let stroked = stroke_to_path(&path, &StrokeStyle{
         cap: LineCap::Round, 
-        join: LineJoin::Round, 
-        width: 10.,
+        join: LineJoin::Bevel, 
+        width: 20.,
          ..Default::default()});
     dbg!(&stroked);
 

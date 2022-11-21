@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-use std::ops::{Sub, Mul, Add, AddAssign, SubAssign, MulAssign};
+use std::ops::{Sub, Mul, Add, AddAssign, SubAssign, MulAssign, Div};
 
 macro_rules! IFC {
     ($e: expr) => {
@@ -14,7 +14,7 @@ pub type HRESULT = i32;
 
 pub const E_UNEXPECTED: i32 = -1;
 pub const S_OK: i32 = 0;
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct GpPointR {
     pub x: f64,
     pub y: f64
@@ -63,6 +63,15 @@ impl Mul<f64> for GpPointR {
     }
 }
 
+impl Div<f64> for GpPointR {
+    type Output = Self;
+
+    fn div(self, rhs: f64) -> Self::Output {
+        GpPointR { x: self.x / rhs, y: self.y / rhs }
+    }
+}
+
+
 impl Mul for GpPointR {
     type Output = f64;
 
@@ -72,8 +81,11 @@ impl Mul for GpPointR {
 }
 
 impl GpPointR {
-    fn ApproxNorm(&self) -> f64 {
+    pub fn ApproxNorm(&self) -> f64 {
         self.x.abs().max(self.y.abs())
+    }
+    pub fn Norm(&self) -> f64 {
+        self.x.hypot(self.y)
     }
 }
 
