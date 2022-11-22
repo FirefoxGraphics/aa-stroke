@@ -110,7 +110,14 @@ impl PathBuilder {
         self.vertices.push(Vertex { x: x1, y: y1, coverage: 1.});
         self.vertices.push(Vertex { x: x2, y: y2, coverage: 1.});
         self.vertices.push(Vertex { x: x3, y: y3, coverage: 1.});
+    }
 
+
+    // x3, y3 is the full coverage vert
+    pub fn tri_ramp(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) {
+        self.vertices.push(Vertex { x: x1, y: y1, coverage: 0.});
+        self.vertices.push(Vertex { x: x2, y: y2, coverage: 0.});
+        self.vertices.push(Vertex { x: x3, y: y3, coverage: 1.});
     }
 
     pub fn quad(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32, x4: f32, y4: f32) {
@@ -410,10 +417,67 @@ fn cap_line(dest: &mut PathBuilder, style: &StrokeStyle, pt: Point, normal: Vect
             // parallel vector
             let v = Vector::new(normal.y, -normal.x);
             let end = pt + v * offset;
-            dest.quad(pt.x + normal.x * offset, pt.y + normal.y * offset,
-            end.x + normal.x * offset, end.y + normal.y * offset,
-            end.x + -normal.x * offset, end.y + -normal.y * offset,
-            pt.x - normal.x * offset, pt.y - normal.y * offset);
+            if dest.aa {
+                let half_width = offset;
+                let offset = offset - 0.5;
+                dest.ramp(                        
+                    end.x + normal.x * (half_width - 0.5), 
+                    end.y + normal.y * (half_width - 0.5),
+                    end.x + normal.x * (half_width + 0.5),
+                    end.y + normal.y * (half_width + 0.5),
+                    pt.x + normal.x * (half_width + 0.5),
+                    pt.y + normal.y * (half_width + 0.5),
+                    pt.x + normal.x * (half_width - 0.5),
+                    pt.y + normal.y * (half_width - 0.5),
+                );
+                dest.quad(pt.x + normal.x * offset, pt.y + normal.y * offset,
+                    end.x + normal.x * offset, end.y + normal.y * offset,
+                    end.x + -normal.x * offset, end.y + -normal.y * offset,
+                    pt.x - normal.x * offset, pt.y - normal.y * offset);
+
+                dest.ramp(                        
+                    pt.x - normal.x * (half_width - 0.5),
+                    pt.y - normal.y * (half_width - 0.5),
+                    pt.x - normal.x * (half_width + 0.5),
+                    pt.y - normal.y * (half_width + 0.5),
+                    end.x - normal.x * (half_width + 0.5),
+                    end.y - normal.y * (half_width + 0.5),
+                    end.x - normal.x * (half_width - 0.5), 
+                    end.y - normal.y * (half_width - 0.5));
+                    
+
+
+                // end
+                dest.ramp(                        
+                    end.x - normal.x * (half_width - 0.5),
+                    end.y - normal.y * (half_width - 0.5),
+                    end.x + v.x - normal.x * (half_width - 0.5),
+                    end.y + v.y - normal.y * (half_width - 0.5),
+                    end.x + v.x + normal.x * (half_width - 0.5),
+                    end.y + v.y + normal.y * (half_width - 0.5),
+                    end.x + normal.x * (half_width - 0.5), 
+                    end.y + normal.y * (half_width - 0.5),
+                );
+                dest.tri_ramp(
+                    end.x + v.x - normal.x * (half_width - 0.5),
+                end.y + v.y - normal.y * (half_width - 0.5),
+                end.x - normal.x * (half_width + 0.5),
+                end.y - normal.y * (half_width + 0.5),
+                end.x - normal.x * (half_width - 0.5),
+                end.y - normal.y * (half_width - 0.5));
+                dest.tri_ramp(
+                    end.x + v.x + normal.x * (half_width - 0.5),
+                end.y + v.y + normal.y * (half_width - 0.5),
+                end.x + normal.x * (half_width + 0.5),
+                end.y + normal.y * (half_width + 0.5),
+                end.x + normal.x * (half_width - 0.5),
+                end.y + normal.y * (half_width - 0.5));
+            } else {
+                dest.quad(pt.x + normal.x * offset, pt.y + normal.y * offset,
+                end.x + normal.x * offset, end.y + normal.y * offset,
+                end.x + -normal.x * offset, end.y + -normal.y * offset,
+                pt.x - normal.x * offset, pt.y - normal.y * offset);
+            }
         }
     }
 }
@@ -427,7 +491,7 @@ fn bevel(
 ) {
     let offset = style.width / 2.;
     if dest.aa {
-        let width = 2.;
+        let width = 1.;
         let offset = offset - width / 2.;
         //XXX: we should be able to just bisect the two norms to get this
         let diff = (s2_normal - s1_normal).normalize();
@@ -436,13 +500,19 @@ fn bevel(
         dest.tri(pt.x + s1_normal.x * offset, pt.y + s1_normal.y * offset,
             pt.x + s2_normal.x * offset, pt.y + s2_normal.y * offset,
             pt.x, pt.y);
-            /* 
+        
+        dest.tri_ramp(pt.x + s1_normal.x * (offset + width), pt.y + s1_normal.y * (offset + width),
+                  pt.x + s1_normal.x * offset + edge_normal.x, pt.y + s1_normal.y * offset + edge_normal.y,
+                  pt.x + s1_normal.x * offset, pt.y + s1_normal.y * offset);
         dest.ramp(
             pt.x + s2_normal.x * offset, pt.y + s2_normal.y * offset,
-            pt.x + s2_normal.x * (offset + width), pt.y + s2_normal.y * (offset + width),
-            pt.x + s1_normal.x * (offset + width), pt.y + s1_normal.y * (offset + width),
+            pt.x + s2_normal.x * offset + edge_normal.x, pt.y + s2_normal.y * offset + edge_normal.y,
+            pt.x + s1_normal.x * offset + edge_normal.x, pt.y + s1_normal.y * offset + edge_normal.y,
             pt.x + s1_normal.x * offset, pt.y + s1_normal.y * offset,
-                );*/
+                );
+        dest.tri_ramp(pt.x + s2_normal.x * (offset + width), pt.y + s2_normal.y * (offset + width),
+                pt.x + s2_normal.x * offset + edge_normal.x, pt.y + s2_normal.y * offset + edge_normal.y,
+                pt.x + s2_normal.x * offset, pt.y + s2_normal.y * offset);
     } else {
         dest.tri(pt.x + s1_normal.x * offset, pt.y + s1_normal.y * offset,
             pt.x + s2_normal.x * offset, pt.y + s2_normal.y * offset,
@@ -573,7 +643,7 @@ pub fn stroke_to_path(path: &Path, style: &StrokeStyle) -> (Path, Vec<Vertex>) {
                         if stroked_path.aa {
                             stroked_path.ramp(                        
                                 pt.x + normal.x * (half_width - 0.5), 
-                                pt.y + (normal.y * half_width - 0.5),
+                                pt.y + normal.y * (half_width - 0.5),
                                 pt.x + normal.x * (half_width + 0.5),
                                 pt.y + normal.y * (half_width + 0.5),
                                 cur_pt.x + normal.x * (half_width + 0.5),
@@ -597,7 +667,7 @@ pub fn stroke_to_path(path: &Path, style: &StrokeStyle) -> (Path, Vec<Vertex>) {
                                 pt.x - normal.x * (half_width + 0.5),
                                 pt.y - normal.y * (half_width + 0.5),
                                 pt.x - normal.x * (half_width - 0.5), 
-                                pt.y - (normal.y * half_width - 0.5),
+                                pt.y - normal.y * (half_width - 0.5),
                             );
                         } else {
                             stroked_path.quad(
@@ -685,13 +755,13 @@ fn write_image(data: &[u8], path: &str, width: u32, height: u32) {
 // How do we handle transformed paths?
 fn main() {
     let mut p = PathBuilder::new();
-    p.move_to(10., 10.);
+    p.move_to(20., 20.);
     p.line_to(100., 100.);
-    p.line_to(110., 10.);
+    p.line_to(110., 20.);
 
     let path = p.finish().0;
     let stroked = stroke_to_path(&path, &StrokeStyle{
-        cap: LineCap::Round, 
+        cap: LineCap::Square, 
         join: LineJoin::Bevel, 
         width: 20.,
          ..Default::default()});
