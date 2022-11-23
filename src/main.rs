@@ -444,8 +444,6 @@ fn cap_line(dest: &mut PathBuilder, style: &StrokeStyle, pt: Point, normal: Vect
                     end.y - normal.y * (half_width + 0.5),
                     end.x - normal.x * (half_width - 0.5), 
                     end.y - normal.y * (half_width - 0.5));
-                    
-
 
                 // end
                 dest.ramp(                        
@@ -751,6 +749,11 @@ fn write_image(data: &[u8], path: &str, width: u32, height: u32) {
     writer.write_image_data(&data).unwrap(); // Save
 }
 
+
+// WpfGfx uses CShapeBase which has a set of Figures
+// Figures have FigureFlags which include FigureFlagClosed
+// so that we can know ahead of time whether the figure/subpath
+// is closed
 
 // How do we handle transformed paths?
 fn main() {
