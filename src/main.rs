@@ -1,3 +1,4 @@
+use euclid::Point2D;
 use std::default::Default;
 
 use bezierflattener::CBezierFlattener;
@@ -605,122 +606,136 @@ fn join_line(
     }
 }
 
-pub fn stroke_to_path(path: &Path, style: &StrokeStyle) -> (Path, Vec<Vertex>) {
-    let mut stroked_path = PathBuilder::new();
-
-    if style.width <= 0. {
-        return stroked_path.finish();
-    }
-
-    let mut cur_pt = None;
-    let mut last_normal = Vector::zero();
-    let half_width = style.width / 2.;
-    let mut start_point = None;
-    for op in &path.ops {
-        match *op {
-            PathOp::MoveTo(pt) => {
-                if let (Some(cur_pt), Some((point, normal))) = (cur_pt, start_point) {
-                    // cap end
-                    cap_line(&mut stroked_path, style, cur_pt, last_normal);
-                    // cap beginning
-                    cap_line(&mut stroked_path, style, point, flip(normal));
-                }
-                start_point = None;
-                cur_pt = Some(pt);
-            }
-            PathOp::LineTo(pt) => {
-                if cur_pt.is_none() {
-                    start_point = None;
-                } else if let Some(cur_pt) = cur_pt {
-                    if let Some(normal) = compute_normal(cur_pt, pt) {
-                        if start_point.is_none() {
-                            start_point = Some((cur_pt, normal));
-                        } else {
-                            join_line(&mut stroked_path, style, cur_pt, last_normal, normal);
-                        }
-                        if stroked_path.aa {
-                            stroked_path.ramp(                        
-                                pt.x + normal.x * (half_width - 0.5), 
-                                pt.y + normal.y * (half_width - 0.5),
-                                pt.x + normal.x * (half_width + 0.5),
-                                pt.y + normal.y * (half_width + 0.5),
-                                cur_pt.x + normal.x * (half_width + 0.5),
-                                cur_pt.y + normal.y * (half_width + 0.5),
-                                cur_pt.x + normal.x * (half_width - 0.5),
-                                cur_pt.y + normal.y * (half_width - 0.5),
-                            );
-                            stroked_path.quad(
-                                cur_pt.x + normal.x * (half_width - 0.5),
-                                cur_pt.y + normal.y * (half_width - 0.5),
-                                pt.x + normal.x * (half_width - 0.5), pt.y + normal.y * (half_width - 0.5),
-                                pt.x + -normal.x * (half_width - 0.5), pt.y + -normal.y * (half_width - 0.5),
-                                cur_pt.x - normal.x * (half_width - 0.5),
-                                cur_pt.y - normal.y * (half_width - 0.5),
-                            );
-                            stroked_path.ramp(                        
-                                cur_pt.x - normal.x * (half_width - 0.5),
-                                cur_pt.y - normal.y * (half_width - 0.5),
-                                cur_pt.x - normal.x * (half_width + 0.5),
-                                cur_pt.y - normal.y * (half_width + 0.5),
-                                pt.x - normal.x * (half_width + 0.5),
-                                pt.y - normal.y * (half_width + 0.5),
-                                pt.x - normal.x * (half_width - 0.5), 
-                                pt.y - normal.y * (half_width - 0.5),
-                            );
-                        } else {
-                            stroked_path.quad(
-                                cur_pt.x + normal.x * half_width,
-                                cur_pt.y + normal.y * half_width,
-                                pt.x + normal.x * half_width, pt.y + normal.y * half_width,
-                                pt.x + -normal.x * half_width, pt.y + -normal.y * half_width,
-                                cur_pt.x - normal.x * half_width,
-                                cur_pt.y - normal.y * half_width,
-                            );
-                        }
-
-                        last_normal = normal;
-
-                    }
-                }
-                cur_pt = Some(pt);
-
-            }
-            PathOp::Close => {
-                if let (Some(cur_pt), Some((end_point, start_normal))) = (cur_pt, start_point) {
-                    if let Some(normal) = compute_normal(cur_pt, end_point) {
-                        join_line(&mut stroked_path, style, cur_pt, last_normal, normal);
-
-                        stroked_path.quad(
-                            cur_pt.x + normal.x * half_width,
-                            cur_pt.y + normal.y * half_width,
-                            end_point.x + normal.x * half_width,
-                            end_point.y + normal.y * half_width,
-                            end_point.x + -normal.x * half_width,
-                            end_point.y + -normal.y * half_width,
-                            cur_pt.x - normal.x * half_width,
-                            cur_pt.y - normal.y * half_width,
-                        );
-                        join_line(&mut stroked_path, style, end_point, normal, start_normal);
-                    } else {
-                        join_line(&mut stroked_path, style, end_point, last_normal, start_normal);
-                    }
-                }
-                cur_pt = start_point.map(|x| x.0);
-                start_point = None;
-            }
-            PathOp::QuadTo(..) => panic!("Only flat paths handled"),
-            PathOp::CubicTo(..) => panic!("Only flat paths handled"),
-        }
-    }
-    if let (Some(cur_pt), Some((point, normal))) = (cur_pt, start_point) {
-        // cap end
-        cap_line(&mut stroked_path, style, cur_pt, last_normal);
-        // cap beginning
-        cap_line(&mut stroked_path, style, point, flip(normal));
-    }
-    stroked_path.finish()
+pub struct Stroker {
+    stroked_path: PathBuilder,
+    cur_pt: Option<Point>,
+    last_normal: Vector,
+    half_width: f32,
+    start_point: Option<(Point, Vector)>,
+    style: StrokeStyle
 }
 
+impl Stroker {
+    pub fn new(style: &StrokeStyle) -> Self {
+        Stroker {
+            stroked_path: PathBuilder::new(),
+            cur_pt: None,
+            last_normal: Vector::zero(),
+            half_width: style.width / 2.,
+            start_point: None,
+            style: style.clone(),
+        }
+    }
+
+    pub fn move_to(&mut self, pt: Point) {
+        if let (Some(cur_pt), Some((point, normal))) = (self.cur_pt, self.start_point) {
+            // cap end
+            cap_line(&mut self.stroked_path, &self.style, cur_pt, self.last_normal);
+            // cap beginning
+            cap_line(&mut self.stroked_path, &self.style, point, flip(normal));
+        }
+        self.start_point = None;
+        self.cur_pt = Some(pt);
+    }
+    pub fn line_to(&mut self, pt: Point) {
+        let cur_pt = self.cur_pt;
+        let stroked_path = &mut self.stroked_path;
+        let half_width = self.half_width;
+
+        if cur_pt.is_none() {
+            self.start_point = None;
+        } else if let Some(cur_pt) = cur_pt {
+            if let Some(normal) = compute_normal(cur_pt, pt) {
+                if self.start_point.is_none() {
+                    self.start_point = Some((cur_pt, normal));
+                } else {
+                    join_line(stroked_path, &self.style, cur_pt, self.last_normal, normal);
+                }
+                if stroked_path.aa {
+                    stroked_path.ramp(                        
+                        pt.x + normal.x * (half_width - 0.5), 
+                        pt.y + normal.y * (half_width - 0.5),
+                        pt.x + normal.x * (half_width + 0.5),
+                        pt.y + normal.y * (half_width + 0.5),
+                        cur_pt.x + normal.x * (half_width + 0.5),
+                        cur_pt.y + normal.y * (half_width + 0.5),
+                        cur_pt.x + normal.x * (half_width - 0.5),
+                        cur_pt.y + normal.y * (half_width - 0.5),
+                    );
+                    stroked_path.quad(
+                        cur_pt.x + normal.x * (half_width - 0.5),
+                        cur_pt.y + normal.y * (half_width - 0.5),
+                        pt.x + normal.x * (half_width - 0.5), pt.y + normal.y * (half_width - 0.5),
+                        pt.x + -normal.x * (half_width - 0.5), pt.y + -normal.y * (half_width - 0.5),
+                        cur_pt.x - normal.x * (half_width - 0.5),
+                        cur_pt.y - normal.y * (half_width - 0.5),
+                    );
+                    stroked_path.ramp(                        
+                        cur_pt.x - normal.x * (half_width - 0.5),
+                        cur_pt.y - normal.y * (half_width - 0.5),
+                        cur_pt.x - normal.x * (half_width + 0.5),
+                        cur_pt.y - normal.y * (half_width + 0.5),
+                        pt.x - normal.x * (half_width + 0.5),
+                        pt.y - normal.y * (half_width + 0.5),
+                        pt.x - normal.x * (half_width - 0.5), 
+                        pt.y - normal.y * (half_width - 0.5),
+                    );
+                } else {
+                    stroked_path.quad(
+                        cur_pt.x + normal.x * half_width,
+                        cur_pt.y + normal.y * half_width,
+                        pt.x + normal.x * half_width, pt.y + normal.y * half_width,
+                        pt.x + -normal.x * half_width, pt.y + -normal.y * half_width,
+                        cur_pt.x - normal.x * half_width,
+                        cur_pt.y - normal.y * half_width,
+                    );
+                }
+
+                self.last_normal = normal;
+
+            }
+        }
+        self.cur_pt = Some(pt);
+    }
+    pub fn close(&mut self) {
+        let stroked_path = &mut self.stroked_path;
+        let half_width = self.half_width;
+        if let (Some(cur_pt), Some((end_point, start_normal))) = (self.cur_pt, self.start_point) {
+            if let Some(normal) = compute_normal(cur_pt, end_point) {
+                join_line(stroked_path, &self.style, cur_pt, self.last_normal, normal);
+
+                stroked_path.quad(
+                    cur_pt.x + normal.x * half_width,
+                    cur_pt.y + normal.y * half_width,
+                    end_point.x + normal.x * half_width,
+                    end_point.y + normal.y * half_width,
+                    end_point.x + -normal.x * half_width,
+                    end_point.y + -normal.y * half_width,
+                    cur_pt.x - normal.x * half_width,
+                    cur_pt.y - normal.y * half_width,
+                );
+                join_line(stroked_path, &self.style, end_point, normal, start_normal);
+            } else {
+                join_line(stroked_path, &self.style, end_point, self.last_normal, start_normal);
+            }
+        }
+        self.cur_pt = self.start_point.map(|x| x.0);
+        self.start_point = None;
+    }
+
+    pub fn finish(self) -> (Path, Vec<Vertex>) {
+        let mut stroked_path = self.stroked_path;
+
+        if let (Some(cur_pt), Some((point, normal))) = (self.cur_pt, self.start_point) {
+            // cap end
+            cap_line(&mut stroked_path, &self.style, cur_pt, self.last_normal);
+            // cap beginning
+            cap_line( &mut stroked_path, &self.style, point, flip(normal));
+        }
+        stroked_path.finish()
+    }
+
+}
 
 fn write_image(data: &[u8], path: &str, width: u32, height: u32) {
     use std::path::Path;
@@ -757,17 +772,16 @@ fn write_image(data: &[u8], path: &str, width: u32, height: u32) {
 
 // How do we handle transformed paths?
 fn main() {
-    let mut p = PathBuilder::new();
-    p.move_to(20., 20.);
-    p.line_to(100., 100.);
-    p.line_to(110., 20.);
-
-    let path = p.finish().0;
-    let stroked = stroke_to_path(&path, &StrokeStyle{
+    let mut stroker = Stroker::new(&StrokeStyle{
         cap: LineCap::Square, 
         join: LineJoin::Bevel, 
         width: 20.,
          ..Default::default()});
+    stroker.move_to(Point::new(20., 20.));
+    stroker.line_to(Point::new(100., 100.));
+    stroker.line_to(Point::new(110., 20.));
+
+    let stroked = stroker.finish();
     dbg!(&stroked);
 
     let mask = rasterize_to_mask(&stroked.1, 200, 200);
