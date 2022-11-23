@@ -595,6 +595,9 @@ fn join_line(
                     intersection.x, intersection.y,
                     pt.x + s2_normal.x * offset, pt.y + s2_normal.y * offset,
                     pt.x, pt.y);
+                    if dest.aa {
+                        // we'll want to intersect the ramps and put a flat cap on the end
+                    }
                 }
             } else {
                 bevel(dest, style, pt, s1_normal, s2_normal);
@@ -612,7 +615,8 @@ pub struct Stroker {
     last_normal: Vector,
     half_width: f32,
     start_point: Option<(Point, Vector)>,
-    style: StrokeStyle
+    style: StrokeStyle,
+    closed_subpath: bool
 }
 
 impl Stroker {
@@ -624,6 +628,7 @@ impl Stroker {
             half_width: style.width / 2.,
             start_point: None,
             style: style.clone(),
+            closed_subpath: false,
         }
     }
 
@@ -631,8 +636,6 @@ impl Stroker {
         if let (Some(cur_pt), Some((point, normal))) = (self.cur_pt, self.start_point) {
             // cap end
             cap_line(&mut self.stroked_path, &self.style, cur_pt, self.last_normal);
-            // cap beginning
-            cap_line(&mut self.stroked_path, &self.style, point, flip(normal));
         }
         self.start_point = None;
         self.cur_pt = Some(pt);
@@ -647,6 +650,13 @@ impl Stroker {
         } else if let Some(cur_pt) = cur_pt {
             if let Some(normal) = compute_normal(cur_pt, pt) {
                 if self.start_point.is_none() {
+                    if !self.closed_subpath {
+                        // cap beginning
+                        cap_line(stroked_path, &self.style, cur_pt, flip(normal));
+                        if stroked_path.aa && self.style.cap == LineCap::Butt {
+                            
+                        }
+                    }
                     self.start_point = Some((cur_pt, normal));
                 } else {
                     join_line(stroked_path, &self.style, cur_pt, self.last_normal, normal);
@@ -773,7 +783,7 @@ fn write_image(data: &[u8], path: &str, width: u32, height: u32) {
 // How do we handle transformed paths?
 fn main() {
     let mut stroker = Stroker::new(&StrokeStyle{
-        cap: LineCap::Square, 
+        cap: LineCap::Round, 
         join: LineJoin::Bevel, 
         width: 20.,
          ..Default::default()});
