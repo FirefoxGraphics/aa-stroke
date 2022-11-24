@@ -621,6 +621,8 @@ pub struct Stroker {
 
 impl Stroker {
     pub fn new(style: &StrokeStyle) -> Self {
+        // XXX: we can handle width < 1 by clamping to scaling the coverage values
+        assert!(style.width >= 1.);
         Stroker {
             stroked_path: PathBuilder::new(),
             cur_pt: None,
