@@ -634,11 +634,17 @@ fn join_line(
                         let ramp_s1 = line_intersection(ramp_start, s1_normal, ramp_intersection, flip(mid)).unwrap();
                         let ramp_s2 = line_intersection(ramp_end, s2_normal, ramp_intersection, flip(mid)).unwrap();
 
-                        //dest.ramp();
-                        //dest.ramp();
+                        dest.ramp(intersection.x, intersection.y,
+                            ramp_s1.x, ramp_s1.y,
+                            ramp_start.x, ramp_start.y,
+                            pt.x + s1_normal.x * offset, pt.y + s1_normal.y * offset,
+                        );
+                        dest.ramp(pt.x + s2_normal.x * offset, pt.y + s2_normal.y * offset,
+                            ramp_end.x, ramp_end.y,
+                            ramp_s2.x, ramp_s2.y,
+                            intersection.x, intersection.y);
 
                         dest.tri_ramp(ramp_s1.x, ramp_s1.y, ramp_s2.x, ramp_s2.y, intersection.x, intersection.y);
-
 
                         // we'll want to intersect the ramps and put a flat cap on the end
                         dest.quad(pt.x + s1_normal.x * offset, pt.y + s1_normal.y * offset,
