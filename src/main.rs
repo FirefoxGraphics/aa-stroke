@@ -579,7 +579,10 @@ fn join_line(
 
     // XXX: joining uses `pt` which can cause seams because it lies halfway on a line and the
     // rasterizer may not find exactly the same spot
-    let offset = style.width / 2.;
+    let mut offset = style.width / 2.;
+    if dest.aa {
+        offset -= 0.5;
+    }
     match style.join {
         LineJoin::Round => {
             dest.arc_wedge(pt, offset, s1_normal, s2_normal);
@@ -591,12 +594,31 @@ fn join_line(
                 let end = pt + s2_normal * offset;
                 if let Some(intersection) = line_intersection(start, s1_normal, end, s2_normal) {
                     // We won't have an intersection if the segments are parallel
-                    dest.quad(pt.x + s1_normal.x * offset, pt.y + s1_normal.y * offset,
-                    intersection.x, intersection.y,
-                    pt.x + s2_normal.x * offset, pt.y + s2_normal.y * offset,
-                    pt.x, pt.y);
                     if dest.aa {
+                        let ramp_start = pt + s1_normal * (offset + 1.);
+                        let ramp_end = pt + s2_normal * (offset + 1.);
+                        let mid = bisect(s1_normal, s2_normal);
+                        let ramp_intersection = intersection + mid;
+
+                        let ramp_s1 = line_intersection(ramp_start, s1_normal, ramp_intersection, flip(mid)).unwrap();
+                        let ramp_s2 = line_intersection(ramp_end, s2_normal, ramp_intersection, flip(mid)).unwrap();
+
+                        dest.ramp();
+                        dest.ramp();
+
+                        dest.tri_ramp(ramp_s1.x, ramp_s1.y, ramp_s2.x, ramp_s2.y, intersection.x, intersection.y);
+
+
                         // we'll want to intersect the ramps and put a flat cap on the end
+                        dest.quad(pt.x + s1_normal.x * offset, pt.y + s1_normal.y * offset,
+                            intersection.x, intersection.y,
+                            pt.x + s2_normal.x * offset, pt.y + s2_normal.y * offset,
+                            pt.x, pt.y);
+                    } else {
+                        dest.quad(pt.x + s1_normal.x * offset, pt.y + s1_normal.y * offset,
+                            intersection.x, intersection.y,
+                            pt.x + s2_normal.x * offset, pt.y + s2_normal.y * offset,
+                            pt.x, pt.y);
                     }
                 }
             } else {
