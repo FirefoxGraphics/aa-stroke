@@ -410,7 +410,38 @@ fn join_round(path: &mut PathBuilder, center: Point, a: Vector, b: Vector, radiu
 fn cap_line(dest: &mut PathBuilder, style: &StrokeStyle, pt: Point, normal: Vector) {
     let offset = style.width / 2.;
     match style.cap {
-        LineCap::Butt => { /* nothing to do */ }
+        LineCap::Butt => { 
+            if dest.aa {
+                let half_width = offset;
+                let end = pt;
+                let v = Vector::new(normal.y, -normal.x);
+                // end
+                dest.ramp(                        
+                    end.x - normal.x * (half_width - 0.5),
+                    end.y - normal.y * (half_width - 0.5),
+                    end.x + v.x - normal.x * (half_width - 0.5),
+                    end.y + v.y - normal.y * (half_width - 0.5),
+                    end.x + v.x + normal.x * (half_width - 0.5),
+                    end.y + v.y + normal.y * (half_width - 0.5),
+                    end.x + normal.x * (half_width - 0.5), 
+                    end.y + normal.y * (half_width - 0.5),
+                );
+                dest.tri_ramp(
+                    end.x + v.x - normal.x * (half_width - 0.5),
+                end.y + v.y - normal.y * (half_width - 0.5),
+                end.x - normal.x * (half_width + 0.5),
+                end.y - normal.y * (half_width + 0.5),
+                end.x - normal.x * (half_width - 0.5),
+                end.y - normal.y * (half_width - 0.5));
+                dest.tri_ramp(
+                    end.x + v.x + normal.x * (half_width - 0.5),
+                end.y + v.y + normal.y * (half_width - 0.5),
+                end.x + normal.x * (half_width + 0.5),
+                end.y + normal.y * (half_width + 0.5),
+                end.x + normal.x * (half_width - 0.5),
+                end.y + normal.y * (half_width - 0.5));
+            }
+         }
         LineCap::Round => {
             dest.arc_wedge(pt, offset, normal, flip(normal));
         }
@@ -603,8 +634,8 @@ fn join_line(
                         let ramp_s1 = line_intersection(ramp_start, s1_normal, ramp_intersection, flip(mid)).unwrap();
                         let ramp_s2 = line_intersection(ramp_end, s2_normal, ramp_intersection, flip(mid)).unwrap();
 
-                        dest.ramp();
-                        dest.ramp();
+                        //dest.ramp();
+                        //dest.ramp();
 
                         dest.tri_ramp(ramp_s1.x, ramp_s1.y, ramp_s2.x, ramp_s2.y, intersection.x, intersection.y);
 
@@ -654,6 +685,20 @@ impl Stroker {
             style: style.clone(),
             closed_subpath: false,
         }
+    }
+
+    pub fn cap_sub_path(&mut self, pt: Point) {
+        if let Some(cur_pt) = self.cur_pt {
+            if let Some(normal) = compute_normal(cur_pt, pt) {
+                self.last_normal = normal;
+            }
+            self.line_to(if self.stroked_path.aa { pt - flip(self.last_normal) * 0.5} else { pt });
+            if let (Some(cur_pt), Some((point, normal))) = (self.cur_pt, self.start_point) {
+                // cap end
+                cap_line(&mut self.stroked_path, &self.style, cur_pt, self.last_normal);
+            }
+        }
+        self.start_point = None;
     }
 
     pub fn move_to(&mut self, pt: Point) {
@@ -731,6 +776,7 @@ impl Stroker {
         }
         self.cur_pt = Some(pt);
     }
+
     pub fn close(&mut self) {
         let stroked_path = &mut self.stroked_path;
         let half_width = self.half_width;
@@ -807,13 +853,13 @@ fn write_image(data: &[u8], path: &str, width: u32, height: u32) {
 // How do we handle transformed paths?
 fn main() {
     let mut stroker = Stroker::new(&StrokeStyle{
-        cap: LineCap::Round, 
+        cap: LineCap::Square, 
         join: LineJoin::Bevel, 
         width: 20.,
          ..Default::default()});
     stroker.move_to(Point::new(20., 20.));
     stroker.line_to(Point::new(100., 100.));
-    stroker.line_to(Point::new(110., 20.));
+    stroker.cap_sub_path(Point::new(110., 20.));
 
     let stroked = stroker.finish();
     dbg!(&stroked);
