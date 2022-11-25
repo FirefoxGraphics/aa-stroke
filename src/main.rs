@@ -410,13 +410,13 @@ fn join_round(path: &mut PathBuilder, center: Point, a: Vector, b: Vector, radiu
 fn cap_line(dest: &mut PathBuilder, style: &StrokeStyle, pt: Point, normal: Vector) {
     let offset = style.width / 2.;
     match style.cap {
-        LineCap::Butt => { 
+        LineCap::Butt => {
             if dest.aa {
                 let half_width = offset;
                 let end = pt;
                 let v = Vector::new(normal.y, -normal.x);
                 // end
-                dest.ramp(                        
+                dest.ramp(
                     end.x - normal.x * (half_width - 0.5),
                     end.y - normal.y * (half_width - 0.5),
                     end.x + v.x - normal.x * (half_width - 0.5),
@@ -850,7 +850,8 @@ fn write_image(data: &[u8], path: &str, width: u32, height: u32) {
 // so that we can know ahead of time whether the figure/subpath
 // is closed
 
-// How do we handle transformed paths?
+// How do we handle transformed paths? D2D seems to only support transforms that
+// can be applied before stroking. (one's with uniform scale?)
 fn main() {
     let mut stroker = Stroker::new(&StrokeStyle{
         cap: LineCap::Square, 
