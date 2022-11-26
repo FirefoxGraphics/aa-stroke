@@ -785,17 +785,45 @@ impl Stroker {
         if let (Some(cur_pt), Some((end_point, start_normal))) = (self.cur_pt, self.start_point) {
             if let Some(normal) = compute_normal(cur_pt, end_point) {
                 join_line(stroked_path, &self.style, cur_pt, self.last_normal, normal);
-
-                stroked_path.quad(
-                    cur_pt.x + normal.x * half_width,
-                    cur_pt.y + normal.y * half_width,
-                    end_point.x + normal.x * half_width,
-                    end_point.y + normal.y * half_width,
-                    end_point.x + -normal.x * half_width,
-                    end_point.y + -normal.y * half_width,
-                    cur_pt.x - normal.x * half_width,
-                    cur_pt.y - normal.y * half_width,
-                );
+                if stroked_path.aa { 
+                    stroked_path.ramp(                        
+                        end_point.x + normal.x * (half_width - 0.5), 
+                        end_point.y + normal.y * (half_width - 0.5),
+                        end_point.x + normal.x * (half_width + 0.5),
+                        end_point.y + normal.y * (half_width + 0.5),
+                        cur_pt.x + normal.x * (half_width + 0.5),
+                        cur_pt.y + normal.y * (half_width + 0.5),
+                        cur_pt.x + normal.x * (half_width - 0.5),
+                        cur_pt.y + normal.y * (half_width - 0.5),
+                    );
+                    stroked_path.quad(
+                        cur_pt.x + normal.x * (half_width - 0.5),
+                        cur_pt.y + normal.y * (half_width - 0.5),
+                        end_point.x + normal.x * (half_width - 0.5), end_point.y + normal.y * (half_width - 0.5),
+                        end_point.x + -normal.x * (half_width - 0.5), end_point.y + -normal.y * (half_width - 0.5),
+                        cur_pt.x - normal.x * (half_width - 0.5),
+                        cur_pt.y - normal.y * (half_width - 0.5),
+                    );
+                    stroked_path.ramp(                        
+                        cur_pt.x - normal.x * (half_width - 0.5),
+                        cur_pt.y - normal.y * (half_width - 0.5),
+                        cur_pt.x - normal.x * (half_width + 0.5),
+                        cur_pt.y - normal.y * (half_width + 0.5),
+                        end_point.x - normal.x * (half_width + 0.5),
+                        end_point.y - normal.y * (half_width + 0.5),
+                        end_point.x - normal.x * (half_width - 0.5), 
+                        end_point.y - normal.y * (half_width - 0.5),
+                    );
+                } else {
+                    stroked_path.quad(
+                        cur_pt.x + normal.x * half_width,
+                        cur_pt.y + normal.y * half_width,
+                        end_point.x + normal.x * half_width, end_point.y + normal.y * half_width,
+                        end_point.x + -normal.x * half_width, end_point.y + -normal.y * half_width,
+                        cur_pt.x - normal.x * half_width,
+                        cur_pt.y - normal.y * half_width,
+                    );
+                }
                 join_line(stroked_path, &self.style, end_point, normal, start_normal);
             } else {
                 join_line(stroked_path, &self.style, end_point, self.last_normal, start_normal);
@@ -864,12 +892,12 @@ fn main() {
     stroker.line_to(Point::new(100., 100.));
     stroker.cap_sub_path(Point::new(110., 20.));
  
-    /*
+    
     stroker.start_sub_path(Point::new(120., 20.), true);
     stroker.line_to(Point::new(120., 50.));
     stroker.line_to(Point::new(140., 50.));
     stroker.close();
-    */
+    
 
     let stroked = stroker.finish();
     dbg!(&stroked);
