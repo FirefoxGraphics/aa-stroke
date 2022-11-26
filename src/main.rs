@@ -695,10 +695,8 @@ impl Stroker {
 
     pub fn cap_sub_path(&mut self, pt: Point) {
         if let Some(cur_pt) = self.cur_pt {
-            if let Some(normal) = compute_normal(cur_pt, pt) {
-                self.last_normal = normal;
-            }
-            self.line_to(if self.stroked_path.aa { pt - flip(self.last_normal) * 0.5} else { pt });
+            let normal = compute_normal(cur_pt, pt).unwrap_or(self.last_normal);
+            self.line_to(if self.stroked_path.aa && self.style.cap == LineCap::Butt { pt - flip(normal) * 0.5} else { pt });
             if let (Some(cur_pt), Some((point, normal))) = (self.cur_pt, self.start_point) {
                 // cap end
                 cap_line(&mut self.stroked_path, &self.style, cur_pt, self.last_normal);
@@ -707,14 +705,12 @@ impl Stroker {
         self.start_point = None;
     }
 
-    pub fn move_to(&mut self, pt: Point) {
-        if let (Some(cur_pt), Some((point, normal))) = (self.cur_pt, self.start_point) {
-            // cap end
-            cap_line(&mut self.stroked_path, &self.style, cur_pt, self.last_normal);
-        }
+    pub fn start_sub_path(&mut self, pt: Point, closed_subpath: bool) {
         self.start_point = None;
         self.cur_pt = Some(pt);
+        self.closed_subpath = closed_subpath;
     }
+
     pub fn line_to(&mut self, pt: Point) {
         let cur_pt = self.cur_pt;
         let stroked_path = &mut self.stroked_path;
@@ -736,7 +732,7 @@ impl Stroker {
                 } else {
                     join_line(stroked_path, &self.style, cur_pt, self.last_normal, normal);
                 }
-                if stroked_path.aa {
+                if stroked_path.aa { 
                     stroked_path.ramp(                        
                         pt.x + normal.x * (half_width - 0.5), 
                         pt.y + normal.y * (half_width - 0.5),
@@ -860,13 +856,20 @@ fn write_image(data: &[u8], path: &str, width: u32, height: u32) {
 // can be applied before stroking. (one's with uniform scale?)
 fn main() {
     let mut stroker = Stroker::new(&StrokeStyle{
-        cap: LineCap::Square, 
+        cap: LineCap::Round, 
         join: LineJoin::Bevel, 
         width: 20.,
          ..Default::default()});
-    stroker.move_to(Point::new(20., 20.));
+    stroker.start_sub_path(Point::new(20., 20.), false);
     stroker.line_to(Point::new(100., 100.));
     stroker.cap_sub_path(Point::new(110., 20.));
+ 
+    /*
+    stroker.start_sub_path(Point::new(120., 20.), true);
+    stroker.line_to(Point::new(120., 50.));
+    stroker.line_to(Point::new(140., 50.));
+    stroker.close();
+    */
 
     let stroked = stroker.finish();
     dbg!(&stroked);
