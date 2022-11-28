@@ -844,4 +844,26 @@ impl Stroker {
     }
 }
 
+#[test]
+fn simple() {
+    let mut stroker = Stroker::new(&StrokeStyle{
+        cap: LineCap::Round, 
+        join: LineJoin::Bevel, 
+        width: 20.,
+        ..Default::default()});
+    stroker.start_sub_path(Point::new(20., 20.), false);
+    stroker.line_to(Point::new(100., 100.));
+    stroker.cap_sub_path(Point::new(110., 20.));
+
+
+    stroker.start_sub_path(Point::new(120., 20.), true);
+    stroker.line_to(Point::new(120., 50.));
+    stroker.line_to(Point::new(140., 50.));
+    stroker.close();
+
+
+    let stroked = stroker.finish().1;
+    assert_eq!(stroked.len(), 438);
+}
+
 
