@@ -550,23 +550,23 @@ pub fn Flatten(&mut self,
 
     // Determine the initial step size
     self.m_cSteps = 1;
-    while (((self.m_ptE[2].ApproxNorm() > self.m_rTolerance)  ||  (self.m_ptE[3].ApproxNorm() > self.m_rTolerance)) &&
-           (self.m_rStepSize > TWICE_MIN_BEZIER_STEP_SIZE))
+    while ((self.m_ptE[2].ApproxNorm() > self.m_rTolerance)  ||  (self.m_ptE[3].ApproxNorm() > self.m_rTolerance)) &&
+           (self.m_rStepSize > TWICE_MIN_BEZIER_STEP_SIZE)
         
     {
         self.HalveTheStep();
     }
 
-    while (self.m_cSteps > 1)
+    while self.m_cSteps > 1
     {
         IFC!(self.Step(&mut fAbort));
-        if (fAbort) {
+        if fAbort {
             return hr;
         }
 
         // E[3] was already tested as E[2] in the previous step
-        if (self.m_ptE[2].ApproxNorm() > self.m_rTolerance &&
-            self.m_rStepSize > TWICE_MIN_BEZIER_STEP_SIZE)
+        if self.m_ptE[2].ApproxNorm() > self.m_rTolerance &&
+            self.m_rStepSize > TWICE_MIN_BEZIER_STEP_SIZE
         {
             // Halving the step once is provably sufficient (see Notes above), so ---
             self.HalveTheStep();
@@ -574,14 +574,14 @@ pub fn Flatten(&mut self,
         else
         {
             // --- but the step can possibly be more than doubled, hence the while loop
-            while (self.TryDoubleTheStep()) {
+            while self.TryDoubleTheStep() {
                 continue;
             }
         }
     }
 
     // Last point
-    if (self.m_fWithTangents)
+    if self.m_fWithTangents
     {
         IFC!(self.m_pSink.AcceptPointAndTangent(&self.bezier.m_ptB[3], &self.GetLastTangent(), true /* last point */));
     }
@@ -634,7 +634,7 @@ fn Step(&mut self,
     self.m_rParameter += self.m_rStepSize;
 
     // Generate the start point of the new interval
-    if (self.m_fWithTangents)
+    if self.m_fWithTangents
     {
         // Compute the tangent there
         pt = self.m_ptE[1] * 6. - self.m_ptE[2] - self.m_ptE[3] * 2.;  //  = twice the derivative at E[0]
@@ -703,15 +703,15 @@ fn HalveTheStep(&mut self)
 fn
 TryDoubleTheStep(&mut self) -> bool
 {
-    let mut fDoubled = (0 == (self.m_cSteps & 1));
-    if (fDoubled)
+    let mut fDoubled = 0 == (self.m_cSteps & 1);
+    if fDoubled
     {
         let ptTemp = self.m_ptE[2] * 2. - self.m_ptE[3];
 
         fDoubled = (self.m_ptE[3].ApproxNorm() <= self.m_rQuarterTolerance) && 
                    (ptTemp.ApproxNorm() <= self.m_rQuarterTolerance);
 
-        if (fDoubled)
+        if fDoubled
         {
             self.m_ptE[1] *= 2.;  self.m_ptE[1] += self.m_ptE[2];
             self.m_ptE[3] *= 4.;
@@ -747,20 +747,20 @@ fn GetFirstTangent(&self) -> Option<GpPointR> // Tangent vector there
 {
 
     let mut vecTangent = self.bezier.m_ptB[1] - self.bezier.m_ptB[0];
-    if (vecTangent * vecTangent > self.m_rFuzz)
+    if vecTangent * vecTangent > self.m_rFuzz
     {
         return Some(vecTangent);  // - we're done
     }
     // Zero first derivative, go for the second
     vecTangent = self.bezier.m_ptB[2] - self.bezier.m_ptB[0];
-    if (vecTangent * vecTangent > self.m_rFuzz)
+    if vecTangent * vecTangent > self.m_rFuzz
     {
         return Some(vecTangent);  // - we're done
     }
     // Zero second derivative, go for the third
     vecTangent = self.bezier.m_ptB[3] - self.bezier.m_ptB[0];
 
-    if (vecTangent * vecTangent <= self.m_rFuzz)
+    if vecTangent * vecTangent <= self.m_rFuzz
     {
         return None;
     }
@@ -800,11 +800,11 @@ fn GetLastTangent(&self) -> GpPointR
 
     let rLastTangentFuzz = self.m_rFuzz/8.;
 
-    if (vecTangent * vecTangent <= rLastTangentFuzz)
+    if vecTangent * vecTangent <= rLastTangentFuzz
     {
         // Zero first derivative, go for the second
         vecTangent = self.bezier.m_ptB[3] - self.bezier.m_ptB[1];
-        if (vecTangent * vecTangent <= rLastTangentFuzz)
+        if vecTangent * vecTangent <= rLastTangentFuzz
         {
             // Zero second derivative, go for the third
             vecTangent = self.bezier.m_ptB[3] - self.bezier.m_ptB[0];
@@ -842,7 +842,7 @@ impl RecursiveFlattener {
         let error = v218.ApproxNorm().max(v220.ApproxNorm());
         if error > self.tolerance {
             let bezier = &self.bezier;
-            let left = CBezier { m_ptB : [bezier.m_ptB[0],
+            let _left = CBezier { m_ptB : [bezier.m_ptB[0],
                 bezier.m_ptB[0],
                 bezier.m_ptB[0],
                 bezier.m_ptB[0]]

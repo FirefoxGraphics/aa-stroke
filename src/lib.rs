@@ -1,9 +1,9 @@
-use euclid::Point2D;
+
 use std::default::Default;
 
 use bezierflattener::CBezierFlattener;
 
-use crate::{bezierflattener::{CFlatteningSink, GpPointR, HRESULT, S_OK, CBezier}, tri_rasterize::rasterize_to_mask};
+use crate::{bezierflattener::{CFlatteningSink, GpPointR, HRESULT, S_OK, CBezier}};
 
 mod bezierflattener;
 pub mod tri_rasterize;
@@ -295,7 +295,7 @@ fn arc_segment_tri(path: &mut PathBuilder, xc: f32, yc: f32, radius: f32, a: Vec
 
     let h = (4. / 3.) * dot(perp(a), mid2) / dot(a, mid2);
 
-    let mut last_point = GpPointR { x: (xc + r_cos_a) as f64, y: (yc + r_sin_a) as f64 };
+    let last_point = GpPointR { x: (xc + r_cos_a) as f64, y: (yc + r_sin_a) as f64 };
     let initial_normal = GpPointR { x: a.x as f64, y: a.y as f64 };
 
 
@@ -306,7 +306,7 @@ fn arc_segment_tri(path: &mut PathBuilder, xc: f32, yc: f32, radius: f32, a: Vec
                 // The point
             vec: &GpPointR,
                 // The tangent there
-            fLast: bool
+            _fLast: bool
                 // Is this the last point on the curve?
             ) -> HRESULT {
                 if self.path.aa {
@@ -344,9 +344,9 @@ fn arc_segment_tri(path: &mut PathBuilder, xc: f32, yc: f32, radius: f32, a: Vec
         fn AcceptPoint(&mut self,
             pt: &GpPointR,
                 // The point
-            t: f64,
+            _t: f64,
                 // Parameter we're at
-            fAborted: &mut bool) -> HRESULT {
+            _fAborted: &mut bool) -> HRESULT {
             self.path.push_tri(self.last_point.x as f32, self.last_point.y as f32, pt.x as f32, pt.y as f32, self.xc, self.yc);
             self.last_point = pt.clone();
             return S_OK;
@@ -695,7 +695,7 @@ impl Stroker {
         if let Some(cur_pt) = self.cur_pt {
             let normal = compute_normal(cur_pt, pt).unwrap_or(self.last_normal);
             self.line_to(if self.stroked_path.aa && self.style.cap == LineCap::Butt { pt - flip(normal) * 0.5} else { pt });
-            if let (Some(cur_pt), Some((point, normal))) = (self.cur_pt, self.start_point) {
+            if let (Some(cur_pt), Some((_point, _normal))) = (self.cur_pt, self.start_point) {
                 // cap end
                 cap_line(&mut self.stroked_path, &self.style, cur_pt, self.last_normal);
             }
