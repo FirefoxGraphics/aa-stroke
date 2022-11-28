@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
+#![allow(non_snake_case)]
 
 use std::ops::{Sub, Mul, Add, AddAssign, SubAssign, MulAssign, Div};
 
@@ -12,7 +13,6 @@ macro_rules! IFC {
 
 pub type HRESULT = i32;
 
-pub const E_UNEXPECTED: i32 = -1;
 pub const S_OK: i32 = 0;
 #[derive(Clone, Copy, Debug)]
 pub struct GpPointR {
@@ -95,13 +95,14 @@ const  SQ_LENGTH_FUZZ: f64 = 1.0e-4;
 
 // Some of these constants need further thinking
 
-const FUZZ: f64 = 1.0e-6;           // Relative 0
+//const FUZZ: f64 = 1.0e-6;           // Relative 0
 // Minimum allowed tolerance - should probably be adjusted to the size of the
 // geometry we are rendering, but for now ---
 
+/* 
 const FUZZ_DOUBLE: f64 = 1.0e-12;           // Double-precision relative 0
 const MIN_TOLERANCE: f64 = 1.0e-6;
-const DEFAULT_FLATTENING_TOLERANCE: f64 = 0.25;
+const DEFAULT_FLATTENING_TOLERANCE: f64 = 0.25;*/
 const TWICE_MIN_BEZIER_STEP_SIZE: f64 = 1.0e-3; // The step size in the Bezier flattener should
                                                  // never go below half this amount.
 //+-----------------------------------------------------------------------------
@@ -742,6 +743,7 @@ TryDoubleTheStep(&mut self) -> bool
 //      The failure here is benign.
 //
 //------------------------------------------------------------------------------
+#[allow(dead_code)]
 fn GetFirstTangent(&self) -> Option<GpPointR> // Tangent vector there
     
 {
@@ -817,6 +819,7 @@ fn GetLastTangent(&self) -> GpPointR
 }
 }
 
+/* 
 struct RecursiveFlattener {
     bezier: CBezier,
     sink: Box<dyn CFlatteningSink>,
@@ -852,5 +855,6 @@ impl RecursiveFlattener {
         }
     }
 }
+*/
 
 

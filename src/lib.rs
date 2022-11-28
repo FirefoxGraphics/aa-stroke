@@ -23,24 +23,6 @@ pub enum PathOp {
     Close,
 }
 
-impl PathOp {
-    fn transform(self, xform: &Transform) -> PathOp {
-        match self {
-            PathOp::MoveTo(p) => PathOp::MoveTo(xform.transform_point(p)),
-            PathOp::LineTo(p) => PathOp::LineTo(xform.transform_point(p)),
-            PathOp::QuadTo(p1, p2) => PathOp::QuadTo(
-                xform.transform_point(p1),
-                xform.transform_point(p2)
-            ),
-            PathOp::CubicTo(p1, p2, p3) => PathOp::CubicTo(
-                xform.transform_point(p1),
-                xform.transform_point(p2),
-                xform.transform_point(p3),
-            ),
-            PathOp::Close => PathOp::Close,
-        }
-    }
-}
 
 /// Represents a complete path usable for filling or stroking.
 #[derive(Clone, Debug)]
@@ -306,7 +288,7 @@ fn arc_segment_tri(path: &mut PathBuilder, xc: f32, yc: f32, radius: f32, a: Vec
                 // The point
             vec: &GpPointR,
                 // The tangent there
-            _fLast: bool
+            _last: bool
                 // Is this the last point on the curve?
             ) -> HRESULT {
                 if self.path.aa {
@@ -346,7 +328,7 @@ fn arc_segment_tri(path: &mut PathBuilder, xc: f32, yc: f32, radius: f32, a: Vec
                 // The point
             _t: f64,
                 // Parameter we're at
-            _fAborted: &mut bool) -> HRESULT {
+            _aborted: &mut bool) -> HRESULT {
             self.path.push_tri(self.last_point.x as f32, self.last_point.y as f32, pt.x as f32, pt.y as f32, self.xc, self.yc);
             self.last_point = pt.clone();
             return S_OK;
@@ -396,6 +378,7 @@ fn arc(path: &mut PathBuilder, xc: f32, yc: f32, radius: f32, a: Vector, b: Vect
     arc_segment_tri(path, xc, yc, radius, mid_v, b);
 }
 
+/* 
 fn join_round(path: &mut PathBuilder, center: Point, a: Vector, b: Vector, radius: f32) {
     /*
     int ccw = dot (perp (b), a) >= 0; // XXX: is this always true?
@@ -403,7 +386,7 @@ fn join_round(path: &mut PathBuilder, center: Point, a: Vector, b: Vector, radiu
     assert (ccw);
     */
     arc(path, center.x, center.y, radius, a, b);
-}
+}*/
 
 fn cap_line(dest: &mut PathBuilder, style: &StrokeStyle, pt: Point, normal: Vector) {
     let offset = style.width / 2.;
