@@ -7,6 +7,8 @@ use crate::{bezierflattener::{CFlatteningSink, GpPointR, HRESULT, S_OK, CBezier}
 
 mod bezierflattener;
 pub mod tri_rasterize;
+#[cfg(feature = "c_bindings")]
+pub mod c_bindings;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Winding {
@@ -814,8 +816,8 @@ impl Stroker {
         self.start_point = None;
     }
 
-    pub fn finish(self) -> (Path, Vec<Vertex>) {
-        let mut stroked_path = self.stroked_path;
+    pub fn finish(&mut self) -> (Path, Vec<Vertex>) {
+        let mut stroked_path = std::mem::replace(&mut self.stroked_path, PathBuilder::new());
 
         if let (Some(cur_pt), Some((point, normal))) = (self.cur_pt, self.start_point) {
             // cap end
