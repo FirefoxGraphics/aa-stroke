@@ -7,4 +7,6 @@ edition = "2021"
 
 [dependencies]
 euclid = "0.22.7"
+
+[dev-dependencies]
 png = "0.17.7"
