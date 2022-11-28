@@ -38,15 +38,29 @@ pub type Transform = euclid::default::Transform2D<f32>;
 pub type Vector = euclid::default::Vector2D<f32>;
 
 
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[repr(C)]
+pub enum LineCap {
+    Round,
+    Square,
+    Butt,
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[repr(C)]
+pub enum LineJoin {
+    Round,
+    Miter,
+    Bevel,
+}
 
 #[derive(Clone, PartialEq, Debug)]
+#[repr(C)]
 pub struct StrokeStyle {
     pub width: f32,
     pub cap: LineCap,
     pub join: LineJoin,
     pub miter_limit: f32,
-    pub dash_array: Vec<f32>,
-    pub dash_offset: f32,
 }
 
 impl Default for StrokeStyle {
@@ -56,8 +70,6 @@ impl Default for StrokeStyle {
             cap: LineCap::Butt,
             join: LineJoin::Miter,
             miter_limit: 10.,
-            dash_array: Vec::new(),
-            dash_offset: 0.,
         }
     }
 }
@@ -181,19 +193,7 @@ impl PathBuilder {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum LineCap {
-    Round,
-    Square,
-    Butt,
-}
 
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum LineJoin {
-    Round,
-    Miter,
-    Bevel,
-}
 
 fn compute_normal(p0: Point, p1: Point) -> Option<Vector> {
     let ux = p1.x - p0.x;
