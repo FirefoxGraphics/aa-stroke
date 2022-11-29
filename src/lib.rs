@@ -341,7 +341,7 @@ fn arc_segment_tri(path: &mut PathBuilder, xc: f32, yc: f32, radius: f32, a: Vec
         GpPointR { x: (xc + r_cos_b + h * r_sin_b) as f64, y: (yc + r_sin_b - h * r_cos_b) as f64, },
         GpPointR { x: (xc + r_cos_b) as f64, y: (yc + r_sin_b) as f64, }]);
     let mut t = Target{ last_point, last_normal: initial_normal, xc, yc, path };
-    let mut f = CBezierFlattener::new(&bezier, &mut t, 0.1);
+    let mut f = CBezierFlattener::new(&bezier, &mut t, 0.25);
     f.Flatten(true);
 
 }
@@ -848,7 +848,7 @@ fn simple() {
 
 
     let stroked = stroker.finish().1;
-    assert_eq!(stroked.len(), 438);
+    assert_eq!(stroked.len(), 330);
 }
 
 
