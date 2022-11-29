@@ -6,6 +6,7 @@ end up with seams or otherwise incorrect coverage values.
 Transforms with uniform scale can be supported by scaling the input points and the stroke width
 before passing them to the stroker. Other transforms are not currently (or ever?) supported.
 
-## TODO
+### TODO
 - strokes with widths less than 1
 - curves
+- using triangle strips instead of triangle lists
