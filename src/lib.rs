@@ -83,23 +83,25 @@ pub struct Vertex {
 /// A helper struct used for constructing a `Path`.
 pub struct PathBuilder {
     vertices: Vec<Vertex>,
+    coverage: f32,
     aa: bool
 }
 
 
 
 impl PathBuilder {
-    pub fn new() -> PathBuilder {
+    pub fn new(coverage: f32) -> PathBuilder {
         PathBuilder {
             vertices: Vec::new(),
+            coverage,
             aa: true
         }
     }
 
     pub fn push_tri(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) {
-        self.vertices.push(Vertex { x: x1, y: y1, coverage: 1.});
-        self.vertices.push(Vertex { x: x2, y: y2, coverage: 1.});
-        self.vertices.push(Vertex { x: x3, y: y3, coverage: 1.});
+        self.vertices.push(Vertex { x: x1, y: y1, coverage: self.coverage});
+        self.vertices.push(Vertex { x: x2, y: y2, coverage: self.coverage});
+        self.vertices.push(Vertex { x: x3, y: y3, coverage: self.coverage});
     }
 
 
@@ -107,7 +109,7 @@ impl PathBuilder {
     pub fn tri_ramp(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) {
         self.vertices.push(Vertex { x: x1, y: y1, coverage: 0.});
         self.vertices.push(Vertex { x: x2, y: y2, coverage: 0.});
-        self.vertices.push(Vertex { x: x3, y: y3, coverage: 1.});
+        self.vertices.push(Vertex { x: x3, y: y3, coverage: self.coverage});
     }
 
     pub fn quad(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32, x4: f32, y4: f32) {
@@ -116,13 +118,13 @@ impl PathBuilder {
     }
 
     pub fn ramp(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32, x4: f32, y4: f32) {
-        self.vertices.push(Vertex { x: x1, y: y1, coverage: 1.});
+        self.vertices.push(Vertex { x: x1, y: y1, coverage: self.coverage});
         self.vertices.push(Vertex { x: x2, y: y2, coverage: 0.});
         self.vertices.push(Vertex { x: x3, y: y3, coverage: 0.});
 
         self.vertices.push(Vertex { x: x3, y: y3, coverage: 0.});
-        self.vertices.push(Vertex { x: x4, y: y4, coverage: 1.});
-        self.vertices.push(Vertex { x: x1, y: y1, coverage: 1.});
+        self.vertices.push(Vertex { x: x4, y: y4, coverage: self.coverage});
+        self.vertices.push(Vertex { x: x1, y: y1, coverage: self.coverage});
     }
 
     // first edge is outside
@@ -582,15 +584,19 @@ pub struct Stroker {
 
 impl Stroker {
     pub fn new(style: &StrokeStyle) -> Self {
-        // XXX: we can handle width < 1 by clamping to scaling the coverage values
-        assert!(style.width >= 1.);
+        let mut style = style.clone();
+        let mut coverage = 1.;
+        if style.width < 1. {
+            coverage = style.width;
+            style.width = 1.;
+        }
         Stroker {
-            stroked_path: PathBuilder::new(),
+            stroked_path: PathBuilder::new(coverage),
             cur_pt: None,
             last_normal: Vector::zero(),
             half_width: style.width / 2.,
             start_point: None,
-            style: style.clone(),
+            style,
             closed_subpath: false,
         }
     }
@@ -736,7 +742,7 @@ impl Stroker {
     }
 
     pub fn finish(&mut self) -> Vec<Vertex> {
-        let mut stroked_path = std::mem::replace(&mut self.stroked_path, PathBuilder::new());
+        let mut stroked_path = std::mem::replace(&mut self.stroked_path, PathBuilder::new(1.));
 
         if let (Some(cur_pt), Some((point, normal))) = (self.cur_pt, self.start_point) {
             // cap end
