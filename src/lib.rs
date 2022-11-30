@@ -82,7 +82,6 @@ pub struct Vertex {
 
 /// A helper struct used for constructing a `Path`.
 pub struct PathBuilder {
-    path: Path,
     vertices: Vec<Vertex>,
     aa: bool
 }
@@ -92,10 +91,6 @@ pub struct PathBuilder {
 impl PathBuilder {
     pub fn new() -> PathBuilder {
         PathBuilder {
-            path: Path {
-                ops: Vec::new(),
-                winding: Winding::NonZero,
-            },
             vertices: Vec::new(),
             aa: true
         }
@@ -116,12 +111,6 @@ impl PathBuilder {
     }
 
     pub fn quad(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32, x4: f32, y4: f32) {
-        self.move_to(x1, y1);
-        self.line_to(x2, y2);
-        self.line_to(x3, y3);
-        self.line_to(x4, y4);
-        self.close();
-
         self.push_tri(x1, y1, x2, y2, x3, y3);
         self.push_tri(x3, y3, x4, y4, x1, y1);
     }
@@ -138,58 +127,16 @@ impl PathBuilder {
 
     // first edge is outside
     pub fn tri(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) {
-        self.move_to(x1, y1);
-        self.line_to(x2, y2);
-        self.line_to(x3, y3);
-        self.close();
-
         self.push_tri(x1, y1, x2, y2, x3, y3);
     }
 
-    /// Moves the current point to `x`, `y`
-    pub fn move_to(&mut self, x: f32, y: f32) {
-        self.path.ops.push(PathOp::MoveTo(Point::new(x, y)))
-    }
-
-    /// Adds a line segment from the current point to `x`, `y`
-    pub fn line_to(&mut self, x: f32, y: f32) {
-        self.path.ops.push(PathOp::LineTo(Point::new(x, y)))
-    }
-
-    /// Adds a quadratic bezier from the current point to `x`, `y`,
-    /// using a control point of `cx`, `cy`
-    pub fn quad_to(&mut self, cx: f32, cy: f32, x: f32, y: f32) {
-        self.path
-            .ops
-            .push(PathOp::QuadTo(Point::new(cx, cy), Point::new(x, y)))
-    }
-
-
     pub fn arc_wedge(&mut self, c: Point, radius: f32, a: Vector, b: Vector) {
-        self.move_to(c.x + a.x * radius, c.y + a.y * radius);
         arc(self, c.x, c.y, radius, a, b);
-        self.line_to(c.x, c.y);
-        self.close();
-    }
-
-    /// Adds a cubic bezier from the current point to `x`, `y`,
-    /// using control points `cx1`, `cy1` and `cx2`, `cy2`
-    pub fn cubic_to(&mut self, cx1: f32, cy1: f32, cx2: f32, cy2: f32, x: f32, y: f32) {
-        self.path.ops.push(PathOp::CubicTo(
-            Point::new(cx1, cy1),
-            Point::new(cx2, cy2),
-            Point::new(x, y),
-        ))
-    }
-
-    /// Closes the current subpath
-    pub fn close(&mut self) {
-        self.path.ops.push(PathOp::Close)
     }
 
     /// Completes the current path
-    pub fn finish(self) -> (Path, Vec<Vertex>) {
-        (self.path, self.vertices)
+    pub fn finish(self) -> Vec<Vertex> {
+        self.vertices
     }
 }
 
@@ -236,31 +183,6 @@ curve by circular arcs and vice versa" by Alekas Riškus. However, the method
 presented there doesn't handle arcs with angles close to 0 because it
 divides by the perp dot product of the two angle vectors.
 */
-fn arc_segment(path: &mut PathBuilder, xc: f32, yc: f32, radius: f32, a: Vector, b: Vector) {
-    let r_sin_a = radius * a.y;
-    let r_cos_a = radius * a.x;
-    let r_sin_b = radius * b.y;
-    let r_cos_b = radius * b.x;
-
-    /* bisect the angle between 'a' and 'b' with 'mid' */
-    let mut mid = a + b;
-    mid /= mid.length();
-
-    /* bisect the angle between 'a' and 'mid' with 'mid2' this is parallel to a
-     * line with angle (B - A)/4 */
-    let mid2 = a + mid;
-
-    let h = (4. / 3.) * dot(perp(a), mid2) / dot(a, mid2);
-
-    path.cubic_to(
-            xc + r_cos_a - h * r_sin_a,
-        yc + r_sin_a + h * r_cos_a,
-        xc + r_cos_b + h * r_sin_b,
-        yc + r_sin_b - h * r_cos_b,
-        xc + r_cos_b,
-        yc + r_sin_b,
-    );
-}
 
 fn arc_segment_tri(path: &mut PathBuilder, xc: f32, yc: f32, radius: f32, a: Vector, b: Vector) {
     let r_sin_a = radius * a.y;
@@ -373,9 +295,6 @@ fn arc(path: &mut PathBuilder, xc: f32, yc: f32, radius: f32, a: Vector, b: Vect
     let mid_v = bisect(a, b);
 
     /* construct the arc using two curve segments */
-    arc_segment(path, xc, yc, radius, a, mid_v);
-    arc_segment(path, xc, yc, radius, mid_v, b);
-
     arc_segment_tri(path, xc, yc, radius, a, mid_v);
     arc_segment_tri(path, xc, yc, radius, mid_v, b);
 }
@@ -816,7 +735,7 @@ impl Stroker {
         self.start_point = None;
     }
 
-    pub fn finish(&mut self) -> (Path, Vec<Vertex>) {
+    pub fn finish(&mut self) -> Vec<Vertex> {
         let mut stroked_path = std::mem::replace(&mut self.stroked_path, PathBuilder::new());
 
         if let (Some(cur_pt), Some((point, normal))) = (self.cur_pt, self.start_point) {
@@ -847,7 +766,7 @@ fn simple() {
     stroker.close();
 
 
-    let stroked = stroker.finish().1;
+    let stroked = stroker.finish();
     assert_eq!(stroked.len(), 330);
 }
 

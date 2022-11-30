@@ -46,7 +46,7 @@ pub extern "C" fn aa_stroke_close(s: &mut Stroker) {
 
 #[no_mangle]
 pub extern "C" fn aa_stroke_finish(s: &mut Stroker) -> VertexBuffer {
-    let result = s.finish().1;
+    let result = s.finish();
     let vb = VertexBuffer { data: result.as_ptr(), len: result.len() };
     std::mem::forget(result);
     vb
