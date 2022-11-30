@@ -15,25 +15,29 @@ pub extern "C" fn aa_stroke_new(style: &StrokeStyle) -> *mut Stroker {
 }
 
 #[no_mangle]
-pub extern "C" fn aa_stroke_start_sub_path(s: &mut Stroker, x: f32, y: f32, closed: bool) {
-    s.start_sub_path(Point::new(x, y), closed);
+pub extern "C" fn aa_stroke_move_to(s: &mut Stroker, x: f32, y: f32, closed: bool) {
+    s.move_to(Point::new(x, y), closed);
 }
 
 #[no_mangle]
-pub extern "C" fn aa_stroke_cap_sub_path(s: &mut Stroker, x: f32, y: f32) {
-    s.cap_sub_path(Point::new(x, y));
+pub extern "C" fn aa_stroke_line_to(s: &mut Stroker, x: f32, y: f32, end: bool) {
+    if end {
+        s.line_to_capped(Point::new(x, y))
+    } else {
+        s.line_to(Point::new(x, y));
+    }
 }
 
 #[no_mangle]
-pub extern "C" fn aa_stroke_line_to(s: &mut Stroker, x: f32, y: f32) {
-    s.line_to(Point::new(x, y));
+pub extern "C" fn aa_stroke_curve_to(s: &mut Stroker, c1x: f32, c1y: f32, c2x: f32, c2y: f32, x: f32, y: f32, end: bool) {
+    if end {
+        s.curve_to_capped(Point::new(c1x, c1y), Point::new(c2x, c2y), Point::new(x, y));
+    } else {
+        s.curve_to(Point::new(c1x, c1y), Point::new(c2x, c2y), Point::new(x, y));
+    }
 }
 
-/*#[no_mangle]
-pub extern "C" fn aa_stroke_curve_to(s: &mut Stroker, c1x: f32, c1y: f32, c2x: f32, c2y: f32, x: f32, y: f32) {
-    s.curve_to(c1x, c1y, c2x, c2y, x, y);
-}
-
+/* 
 #[no_mangle]
 pub extern "C" fn aa_stroke_quad_to(s: &mut Stroker, cx: f32, cy: f32, x: f32, y: f32) {
     s.quad_to(cx, cy, x, y);
@@ -68,9 +72,9 @@ pub unsafe extern "C" fn aa_stroke_release(s: *mut Stroker) {
 fn simple() {
     let style = StrokeStyle::default();
     let s = unsafe { &mut *aa_stroke_new(&style) } ;
-    aa_stroke_start_sub_path(s, 10., 10., false);
-    aa_stroke_line_to(s, 100., 100.);
-    aa_stroke_cap_sub_path(s, 100., 10.);
+    aa_stroke_move_to(s, 10., 10., false);
+    aa_stroke_line_to(s, 100., 100., false);
+    aa_stroke_line_to(s, 100., 10., true);
     let vb = aa_stroke_finish(s);
     aa_stroke_vertex_buffer_release(vb);
     unsafe { aa_stroke_release(s) } ;

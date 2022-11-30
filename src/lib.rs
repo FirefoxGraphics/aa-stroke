@@ -254,7 +254,8 @@ fn arc_segment_tri(path: &mut PathBuilder, xc: f32, yc: f32, radius: f32, a: Vec
                 // The point
             _t: f64,
                 // Parameter we're at
-            _aborted: &mut bool) -> HRESULT {
+            _aborted: &mut bool,
+            _last_point: bool) -> HRESULT {
             self.path.push_tri(self.last_point.x as f32, self.last_point.y as f32, pt.x as f32, pt.y as f32, self.xc, self.yc);
             self.last_point = pt.clone();
             return S_OK;
@@ -601,7 +602,7 @@ impl Stroker {
         }
     }
 
-    pub fn cap_sub_path(&mut self, pt: Point) {
+    pub fn line_to_capped(&mut self, pt: Point) {
         if let Some(cur_pt) = self.cur_pt {
             let normal = compute_normal(cur_pt, pt).unwrap_or(self.last_normal);
             self.line_to(if self.stroked_path.aa && self.style.cap == LineCap::Butt { pt - flip(normal) * 0.5} else { pt });
@@ -613,7 +614,7 @@ impl Stroker {
         self.start_point = None;
     }
 
-    pub fn start_sub_path(&mut self, pt: Point, closed_subpath: bool) {
+    pub fn move_to(&mut self, pt: Point, closed_subpath: bool) {
         self.start_point = None;
         self.cur_pt = Some(pt);
         self.closed_subpath = closed_subpath;
@@ -688,7 +689,15 @@ impl Stroker {
     }
 
     pub fn curve_to(&mut self, cx1: Point, cx2: Point, pt: Point) {
-        struct Target<'a> { stroker: &'a mut Stroker }
+        self.curve_to_internal(cx1, cx2, pt, false);
+    }
+
+    pub fn curve_to_capped(&mut self, cx1: Point, cx2: Point, pt: Point) {
+        self.curve_to_internal(cx1, cx2, pt, true);
+    }
+
+    pub fn curve_to_internal(&mut self, cx1: Point, cx2: Point, pt: Point, end: bool) {
+        struct Target<'a> { stroker: &'a mut Stroker, end: bool }
         impl<'a> CFlatteningSink for Target<'a> {
             fn AcceptPointAndTangent(&mut self, _: &GpPointR, _: &GpPointR, _: bool ) -> HRESULT {
                 panic!()
@@ -699,8 +708,13 @@ impl Stroker {
                     // The point
                 _t: f64,
                     // Parameter we're at
-                _aborted: &mut bool) -> HRESULT {
-                self.stroker.line_to(Point::new(pt.x as f32, pt.y as f32));
+                _aborted: &mut bool,
+                last_point: bool) -> HRESULT {
+                if last_point && self.end  {
+                    self.stroker.line_to_capped(Point::new(pt.x as f32, pt.y as f32));
+                } else {
+                    self.stroker.line_to(Point::new(pt.x as f32, pt.y as f32));
+                }
                 return S_OK;
             }
         }
@@ -709,7 +723,7 @@ impl Stroker {
             GpPointR { x: cx1.x as f64, y: cx1.y as f64, },
             GpPointR { x: cx2.x as f64, y: cx2.y as f64, },
             GpPointR { x: pt.x as f64, y: pt.y as f64, }]);
-        let mut t = Target{ stroker: self };
+        let mut t = Target{ stroker: self, end };
         let mut f = CBezierFlattener::new(&bezier, &mut t, 0.25);
         f.Flatten(false);
     }
@@ -788,11 +802,11 @@ fn simple() {
         join: LineJoin::Bevel, 
         width: 20.,
         ..Default::default()});
-    stroker.start_sub_path(Point::new(20., 20.), false);
+    stroker.move_to(Point::new(20., 20.), false);
     stroker.line_to(Point::new(100., 100.));
-    stroker.cap_sub_path(Point::new(110., 20.));
+    stroker.line_to_capped(Point::new(110., 20.));
 
-    stroker.start_sub_path(Point::new(120., 20.), true);
+    stroker.move_to(Point::new(120., 20.), true);
     stroker.line_to(Point::new(120., 50.));
     stroker.line_to(Point::new(140., 50.));
     stroker.close();
@@ -808,7 +822,7 @@ fn curve() {
         join: LineJoin::Bevel,
         width: 20.,
         ..Default::default()});
-        stroker.start_sub_path(Point::new(20., 160.), true);
+        stroker.move_to(Point::new(20., 160.), true);
         stroker.curve_to(Point::new(100., 160.), Point::new(100., 180.), Point::new(20., 180.));
         stroker.close();
     let stroked = stroker.finish();

@@ -43,17 +43,17 @@ fn main() {
         join: LineJoin::Bevel, 
         width: 20.,
          ..Default::default()});
-    stroker.start_sub_path(Point::new(20., 20.), false);
+    stroker.move_to(Point::new(20., 20.), false);
     stroker.line_to(Point::new(100., 100.));
-    stroker.cap_sub_path(Point::new(110., 20.));
+    stroker.line_to_capped(Point::new(110., 20.));
  
     
-    stroker.start_sub_path(Point::new(120., 20.), true);
+    stroker.move_to(Point::new(120., 20.), true);
     stroker.line_to(Point::new(120., 50.));
     stroker.line_to(Point::new(140., 50.));
     stroker.close();
 
-    stroker.start_sub_path(Point::new(20., 160.), true);
+    stroker.move_to(Point::new(20., 160.), true);
     stroker.curve_to(Point::new(100., 160.), Point::new(100., 180.), Point::new(20., 180.));
     stroker.close();
 

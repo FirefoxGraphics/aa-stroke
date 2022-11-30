@@ -314,7 +314,9 @@ pub trait CFlatteningSink {
                 // The point
             t: f64,
                 // Parameter we're at
-            fAborted: &mut bool) -> HRESULT;
+            fAborted: &mut bool,
+            lastPoint: bool
+        ) -> HRESULT;
 }
 
 //+-----------------------------------------------------------------------------
@@ -588,7 +590,7 @@ pub fn Flatten(&mut self,
     }
     else
     {
-        IFC!(self.m_pSink.AcceptPoint(&self.bezier.m_ptB[3], 1., &mut fAbort));
+        IFC!(self.m_pSink.AcceptPoint(&self.bezier.m_ptB[3], 1., &mut fAbort, true));
     }
 
     return hr;
@@ -643,7 +645,7 @@ fn Step(&mut self,
     }
     else
     {
-        IFC!(self.m_pSink.AcceptPoint(&self.m_ptE[0], self.m_rParameter, fAbort));
+        IFC!(self.m_pSink.AcceptPoint(&self.m_ptE[0], self.m_rParameter, fAbort, false));
     }
     
     self.m_cSteps-=1;
