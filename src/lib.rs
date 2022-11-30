@@ -801,4 +801,17 @@ fn simple() {
     assert_eq!(stroked.len(), 330);
 }
 
+#[test]
+fn curve() {
+    let mut stroker = Stroker::new(&StrokeStyle{
+        cap: LineCap::Round,
+        join: LineJoin::Bevel,
+        width: 20.,
+        ..Default::default()});
+        stroker.start_sub_path(Point::new(20., 160.), true);
+        stroker.curve_to(Point::new(100., 160.), Point::new(100., 180.), Point::new(20., 180.));
+        stroker.close();
+    let stroked = stroker.finish();
+    assert_eq!(stroked.len(), 1089);
+}
 
