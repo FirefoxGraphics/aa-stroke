@@ -687,6 +687,33 @@ impl Stroker {
         self.cur_pt = Some(pt);
     }
 
+    pub fn curve_to(&mut self, cx1: Point, cx2: Point, pt: Point) {
+        struct Target<'a> { stroker: &'a mut Stroker }
+        impl<'a> CFlatteningSink for Target<'a> {
+            fn AcceptPointAndTangent(&mut self, _: &GpPointR, _: &GpPointR, _: bool ) -> HRESULT {
+                panic!()
+            }
+
+            fn AcceptPoint(&mut self,
+                pt: &GpPointR,
+                    // The point
+                _t: f64,
+                    // Parameter we're at
+                _aborted: &mut bool) -> HRESULT {
+                self.stroker.line_to(Point::new(pt.x as f32, pt.y as f32));
+                return S_OK;
+            }
+        }
+        let cur_pt = self.cur_pt.unwrap_or(cx1);
+        let bezier = CBezier::new([GpPointR { x: cur_pt.x as f64, y: cur_pt.y as f64,  },
+            GpPointR { x: cx1.x as f64, y: cx1.y as f64, },
+            GpPointR { x: cx2.x as f64, y: cx2.y as f64, },
+            GpPointR { x: pt.x as f64, y: pt.y as f64, }]);
+        let mut t = Target{ stroker: self };
+        let mut f = CBezierFlattener::new(&bezier, &mut t, 0.25);
+        f.Flatten(false);
+    }
+
     pub fn close(&mut self) {
         let stroked_path = &mut self.stroked_path;
         let half_width = self.half_width;
@@ -765,12 +792,10 @@ fn simple() {
     stroker.line_to(Point::new(100., 100.));
     stroker.cap_sub_path(Point::new(110., 20.));
 
-
     stroker.start_sub_path(Point::new(120., 20.), true);
     stroker.line_to(Point::new(120., 50.));
     stroker.line_to(Point::new(140., 50.));
     stroker.close();
-
 
     let stroked = stroker.finish();
     assert_eq!(stroked.len(), 330);

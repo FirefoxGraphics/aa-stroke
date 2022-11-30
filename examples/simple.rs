@@ -52,7 +52,10 @@ fn main() {
     stroker.line_to(Point::new(120., 50.));
     stroker.line_to(Point::new(140., 50.));
     stroker.close();
-    
+
+    stroker.start_sub_path(Point::new(20., 160.), true);
+    stroker.curve_to(Point::new(100., 160.), Point::new(100., 180.), Point::new(20., 180.));
+    stroker.close();
 
     let stroked = stroker.finish();
     dbg!(&stroked);
