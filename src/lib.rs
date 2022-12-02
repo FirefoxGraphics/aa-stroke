@@ -516,14 +516,15 @@ fn join_line(
     // XXX: joining uses `pt` which can cause seams because it lies halfway on a line and the
     // rasterizer may not find exactly the same spot
     let mut offset = style.width / 2.;
-    if dest.aa {
-        offset -= 0.5;
-    }
+
     match style.join {
         LineJoin::Round => {
             dest.arc_wedge(pt, offset, s1_normal, s2_normal);
         }
         LineJoin::Miter => {
+            if dest.aa {
+                offset -= 0.5;
+            }
             let in_dot_out = -s1_normal.x * s2_normal.x + -s1_normal.y * s2_normal.y;
             if 2. <= style.miter_limit * style.miter_limit * (1. - in_dot_out) {
                 let start = pt + s1_normal * offset;
@@ -827,5 +828,19 @@ fn curve() {
         stroker.close();
     let stroked = stroker.finish();
     assert_eq!(stroked.len(), 1089);
+}
+
+#[test]
+fn width_one_radius_arc() {
+    // previously this caused us to try to flatten an arc with radius 0
+    let mut stroker = Stroker::new(&StrokeStyle{
+        cap: LineCap::Round,
+        join: LineJoin::Round,
+        width: 1.,
+        ..Default::default()});
+    stroker.move_to(Point::new(20., 20.), false);
+    stroker.line_to(Point::new(30., 160.));
+    stroker.line_to_capped(Point::new(40., 20.));
+    stroker.finish();
 }
 
