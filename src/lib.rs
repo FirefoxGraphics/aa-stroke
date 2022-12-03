@@ -265,6 +265,9 @@ fn arc_segment_tri(path: &mut PathBuilder, xc: f32, yc: f32, radius: f32, a: Vec
         GpPointR { x: (xc + r_cos_a - h * r_sin_a) as f64, y: (yc + r_sin_a + h * r_cos_a) as f64, },
         GpPointR { x: (xc + r_cos_b + h * r_sin_b) as f64, y: (yc + r_sin_b - h * r_cos_b) as f64, },
         GpPointR { x: (xc + r_cos_b) as f64, y: (yc + r_sin_b) as f64, }]);
+    if bezier.is_degenerate() {
+        return;
+    }
     let mut t = Target{ last_point, last_normal: initial_normal, xc, yc, path };
     let mut f = CBezierFlattener::new(&bezier, &mut t, 0.25);
     f.Flatten(true);
@@ -429,7 +432,10 @@ fn bevel(
         let width = 1.;
         let offset = offset - width / 2.;
         //XXX: we should be able to just bisect the two norms to get this
-        let diff = (s2_normal - s1_normal).normalize();
+        let diff = match (s2_normal - s1_normal).try_normalize() {
+            Some(diff) => diff,
+            None => return,
+        };
         let edge_normal = perp(diff);
 
         dest.tri(pt.x + s1_normal.x * offset, pt.y + s1_normal.y * offset,
@@ -537,20 +543,25 @@ fn join_line(
                         let mid = bisect(s1_normal, s2_normal);
                         let ramp_intersection = intersection + mid;
 
-                        let ramp_s1 = line_intersection(ramp_start, s1_normal, ramp_intersection, flip(mid)).unwrap();
-                        let ramp_s2 = line_intersection(ramp_end, s2_normal, ramp_intersection, flip(mid)).unwrap();
+                        let ramp_s1 = line_intersection(ramp_start, s1_normal, ramp_intersection, flip(mid));
+                        let ramp_s2 = line_intersection(ramp_end, s2_normal, ramp_intersection, flip(mid));
 
-                        dest.ramp(intersection.x, intersection.y,
-                            ramp_s1.x, ramp_s1.y,
-                            ramp_start.x, ramp_start.y,
-                            pt.x + s1_normal.x * offset, pt.y + s1_normal.y * offset,
-                        );
-                        dest.ramp(pt.x + s2_normal.x * offset, pt.y + s2_normal.y * offset,
-                            ramp_end.x, ramp_end.y,
-                            ramp_s2.x, ramp_s2.y,
-                            intersection.x, intersection.y);
-
-                        dest.tri_ramp(ramp_s1.x, ramp_s1.y, ramp_s2.x, ramp_s2.y, intersection.x, intersection.y);
+                        if let Some(ramp_s1) = ramp_s1 {
+                            dest.ramp(intersection.x, intersection.y,
+                                ramp_s1.x, ramp_s1.y,
+                                ramp_start.x, ramp_start.y,
+                                pt.x + s1_normal.x * offset, pt.y + s1_normal.y * offset,
+                            );
+                        }
+                        if let Some(ramp_s2) = ramp_s2 {
+                            dest.ramp(pt.x + s2_normal.x * offset, pt.y + s2_normal.y * offset,
+                                ramp_end.x, ramp_end.y,
+                                ramp_s2.x, ramp_s2.y,
+                                intersection.x, intersection.y);
+                            if let Some(ramp_s1) = ramp_s1 {
+                                dest.tri_ramp(ramp_s1.x, ramp_s1.y, ramp_s2.x, ramp_s2.y, intersection.x, intersection.y);
+                            }
+                        }
 
                         // we'll want to intersect the ramps and put a flat cap on the end
                         dest.quad(pt.x + s1_normal.x * offset, pt.y + s1_normal.y * offset,
@@ -842,5 +853,22 @@ fn width_one_radius_arc() {
     stroker.line_to(Point::new(30., 160.));
     stroker.line_to_capped(Point::new(40., 20.));
     stroker.finish();
+}
+
+#[test]
+fn parallel_line_join() {
+    // ensure line joins of almost parallel lines don't cause math to fail
+    for join in [LineJoin::Bevel, LineJoin::Round, LineJoin::Miter] {
+        let mut stroker = Stroker::new(&StrokeStyle{
+            cap: LineCap::Butt,
+            join,
+            width: 1.0,
+            ..Default::default()});
+        stroker.move_to(Point::new(19.812500, 71.625000), true);
+        stroker.line_to(Point::new(19.250000, 72.000000));
+        stroker.line_to(Point::new(19.062500, 72.125000));
+        stroker.close();
+        stroker.finish();
+    }
 }
 

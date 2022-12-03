@@ -14,7 +14,7 @@ macro_rules! IFC {
 pub type HRESULT = i32;
 
 pub const S_OK: i32 = 0;
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GpPointR {
     pub x: f64,
     pub y: f64
@@ -188,7 +188,7 @@ public:
 
 
 */
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 
 pub struct CBezier
 {
@@ -296,6 +296,12 @@ protected:
 impl CBezier {
     pub fn new(curve: [GpPointR; 4]) -> Self {
         Self { m_ptB: curve }
+    }
+
+    pub fn is_degenerate(&self) -> bool {
+        self.m_ptB[0] == self.m_ptB[1] &&
+            self.m_ptB[0] == self.m_ptB[2] &&
+            self.m_ptB[0] == self.m_ptB[3]
     }
 }
 
