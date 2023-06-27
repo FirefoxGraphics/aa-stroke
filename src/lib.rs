@@ -423,6 +423,8 @@ fn cap_line(dest: &mut PathBuilder, style: &StrokeStyle, pt: Point, normal: Vect
                     end.x + normal.x * (half_width - 0.5), 
                     end.y + normal.y * (half_width - 0.5),
                 );
+
+                // corners
                 dest.tri_ramp(
                     end.x + v.x - normal.x * (half_width - 0.5),
                 end.y + v.y - normal.y * (half_width - 0.5),
