@@ -75,9 +75,9 @@ impl Default for StrokeStyle {
 }
 #[derive(Debug)]
 pub struct Vertex {
-    x: f32,
-    y: f32,
-    coverage: f32
+    pub x: f32,
+    pub y: f32,
+    pub coverage: f32
 }
 
 /// A helper struct used for constructing a `Path`.
