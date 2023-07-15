@@ -540,7 +540,7 @@ fn line_intersection(a: Point, a_perp: Vector, b: Point, b_perp: Vector) -> Opti
 
 fn is_interior_angle(a: Vector, b: Vector) -> bool {
     /* angles of 180 and 0 degress will evaluate to 0, however
-     * we to treat 180 as an interior angle and 180 as an exterior angle */
+     * we to treat 0 as an interior angle and 180 as an exterior angle */
     dot(perp(a), b) > 0. || a == b /* 0 degrees is interior */
 }
 
