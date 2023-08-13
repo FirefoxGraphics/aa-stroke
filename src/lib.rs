@@ -659,7 +659,8 @@ impl<'z> Stroker<'z> {
     pub fn line_to_capped(&mut self, pt: Point) {
         if let Some(cur_pt) = self.cur_pt {
             let normal = compute_normal(cur_pt, pt).unwrap_or(self.last_normal);
-            // if we have a butt cap end the line half a pixel early so we have room to put the cap
+            // if we have a butt cap end the line half a pixel early so we have room to put the cap.
+            // XXX: this will probably mess things up if the line is shorter than 1/2 pixel long
             self.line_to(if self.stroked_path.aa && self.style.cap == LineCap::Butt { pt + perp(normal) * 0.5} else { pt });
             if let (Some(cur_pt), Some((_point, _normal))) = (self.cur_pt, self.start_point) {
                 // cap end
@@ -690,6 +691,7 @@ impl<'z> Stroker<'z> {
                         let mut cur_pt = cur_pt;
                         if stroked_path.aa && self.style.cap == LineCap::Butt {
                             // adjust the starting point to make room for the cap
+                            // XXX: this will probably mess things up if the line is shorter than 1/2 pixel long
                             cur_pt += perp(flip(normal)) * 0.5;
                         }
                         cap_line(stroked_path, &self.style, cur_pt, flip(normal));
@@ -893,7 +895,6 @@ fn curve() {
 
 #[test]
 fn butt_cap() {
-    // previously this caused us to try to flatten an arc with radius 0
     let mut stroker = Stroker::new(&StrokeStyle{
         cap: LineCap::Butt,
         join: LineJoin::Bevel,
@@ -903,7 +904,7 @@ fn butt_cap() {
     stroker.line_to_capped(Point::new(40., 20.5));
     let result = stroker.finish();
     for v in result {
-        assert!(v.y == 20.5 || v.y == 19.5 || v.y == 21.5); 
+        assert!(v.y == 20.5 || v.y == 19.5 || v.y == 21.5);
     }
 }
 
