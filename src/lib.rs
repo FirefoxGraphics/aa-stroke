@@ -622,8 +622,8 @@ fn join_line(
                         // cross = sin, dot = cos
                         let s = cross(mid, s1_normal)/(1. + dot(s1_normal, mid));
 
-                        let ramp_s1 = intersection + s1_normal * (offset + 1.) + unperp(s1_normal) * s;
-                        let ramp_s2 = intersection + s2_normal * (offset + 1.) + unperp(s2_normal) * s;
+                        let ramp_s1 = intersection + s1_normal * 1. + unperp(s1_normal) * s;
+                        let ramp_s2 = intersection + s2_normal * 1. + unperp(s2_normal) * s;
 
                         dest.ramp(intersection.x, intersection.y,
                             ramp_s1.x, ramp_s1.y,
@@ -1009,5 +1009,24 @@ fn degenerate_miter_join() {
         assert!(v.y >= 527.);
     }
 
+    let mut stroker = Stroker::new(&StrokeStyle{
+        cap: LineCap::Square,
+        join: LineJoin::Miter,
+        width: 40.0,
+        ..Default::default()});
+
+    fn distance_from_line(p1: Point, p2: Point, x: Point)  -> f32 {
+        ((p2.x - p1.x)*(p1.y - x.y) - (p1.x - x.x)*(p2.y - p1.y)).abs() /
+          ((p2.x - p1.x).powi(2) + (p2.y - p1.y).powi(2)).sqrt()
+    }
+    let start = Point::new(512., 599.);
+    let end = Point::new(513.51666, 597.47736);
+    stroker.move_to(start, false);
+    stroker.line_to(Point::new(512.3874, 598.6111));
+    stroker.line_to_capped(end);
+    let result = stroker.finish();
+    for v in result {
+        assert!(dbg!(distance_from_line(start, end, Point::new(v.x, v.y))) <= 21.);
+    }
 }
 
