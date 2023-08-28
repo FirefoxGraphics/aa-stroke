@@ -68,9 +68,9 @@ pub extern "C" fn aa_stroke_finish(s: &mut Stroker) -> VertexBuffer {
             len: output_buffer_size,
         }
     } else {
-        let result = stroked_path.finish();
-        let vb = VertexBuffer { data: result.as_ptr(), len: result.len() };
-        std::mem::forget(result);
+        let mut result = s.finish();
+        let len = result.len();
+        let vb = VertexBuffer { data: Box::leak(result).as_ptr(), len };
         vb
     }
 }

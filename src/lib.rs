@@ -156,8 +156,8 @@ impl<'z> PathBuilder<'z> {
     }
 
     /// Completes the current path
-    pub fn finish(self) -> Vec<Vertex> {
-        self.vertices
+    pub fn finish(self) -> Box<[Vertex]> {
+        self.vertices.into_boxed_slice()
     }
 
     pub fn get_output_buffer_size(&self) -> Option<usize> {
@@ -890,7 +890,7 @@ impl<'z> Stroker<'z> {
         stroked_path
     }
 
-    pub fn finish(&mut self) -> Vec<Vertex> {
+    pub fn finish(&mut self) -> Box<[Vertex]> {
         self.get_stroked_path().finish()
     }
 }
@@ -939,7 +939,7 @@ fn butt_cap() {
     stroker.move_to(Point::new(20., 20.5), false);
     stroker.line_to_capped(Point::new(40., 20.5));
     let result = stroker.finish();
-    for v in result {
+    for v in result.iter() {
         assert!(v.y == 20.5 || v.y == 19.5 || v.y == 21.5);
     }
 }
@@ -1005,7 +1005,7 @@ fn degenerate_miter_join() {
 
     let result = stroker.finish();
     // make sure none of the verticies are wildly out of place
-    for v in result {
+    for v in result.iter() {
         assert!(v.y >= 527.);
     }
 
@@ -1025,7 +1025,7 @@ fn degenerate_miter_join() {
     stroker.line_to(Point::new(512.3874, 598.6111));
     stroker.line_to_capped(end);
     let result = stroker.finish();
-    for v in result {
+    for v in result.iter() {
         assert!(dbg!(distance_from_line(start, end, Point::new(v.x, v.y))) <= 21.);
     }
 }
