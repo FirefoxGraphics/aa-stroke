@@ -707,12 +707,16 @@ impl<'z> Stroker<'z> {
     }
 
     pub fn move_to(&mut self, pt: Point, closed_subpath: bool) {
+        //eprintln!("stroker.move_to(Point::new({}, {}), {});", pt.x, pt.y, closed_subpath);
+
         self.start_point = None;
         self.cur_pt = Some(pt);
         self.closed_subpath = closed_subpath;
     }
 
     pub fn line_to(&mut self, pt: Point) {
+        //eprintln!("stroker.line_to(Point::new({}, {}));", pt.x, pt.y);
+
         let cur_pt = self.cur_pt;
         let stroked_path = &mut self.stroked_path;
         let half_width = self.half_width;
@@ -784,6 +788,7 @@ impl<'z> Stroker<'z> {
     }
 
     pub fn curve_to(&mut self, cx1: Point, cx2: Point, pt: Point) {
+        //eprintln!("stroker.curve_to(Point::new({}, {}), Point::new({}, {}), Point::new({}, {}));", cx1.x, cx1.y, cx2.x, cx2.y, pt.x, pt.y);
         self.curve_to_internal(cx1, cx2, pt, false);
     }
 
