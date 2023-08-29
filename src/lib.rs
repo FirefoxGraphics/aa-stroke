@@ -623,7 +623,7 @@ fn join_line(
                         let s = cross(mid, s1_normal)/(1. + dot(s1_normal, mid));
 
                         let ramp_s1 = intersection + s1_normal * 1. + unperp(s1_normal) * s;
-                        let ramp_s2 = intersection + s2_normal * 1. + unperp(s2_normal) * s;
+                        let ramp_s2 = intersection + s2_normal * 1. + perp(s2_normal) * s;
 
                         dest.ramp(intersection.x, intersection.y,
                             ramp_s1.x, ramp_s1.y,
