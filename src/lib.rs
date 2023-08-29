@@ -620,7 +620,11 @@ fn join_line(
                         let mid = bisect(s1_normal, s2_normal);
 
                         // cross = sin, dot = cos
-                        let s = cross(mid, s1_normal)/(1. + dot(s1_normal, mid));
+                        let cos = dot(s1_normal, mid);
+                        let s = cross(mid, s1_normal)/(1. + cos);
+
+                        // compute the intersection in a more stable way
+                        let intersection = pt + mid * (offset / cos);
 
                         let ramp_s1 = intersection + s1_normal * 1. + unperp(s1_normal) * s;
                         let ramp_s2 = intersection + s2_normal * 1. + perp(s2_normal) * s;
@@ -1031,7 +1035,40 @@ fn degenerate_miter_join() {
     stroker.line_to_capped(end);
     let result = stroker.finish();
     for v in result.iter() {
-        assert!(dbg!(distance_from_line(start, end, Point::new(v.x, v.y))) <= 21.);
+        assert!(distance_from_line(start, end, Point::new(v.x, v.y)) <= 21.);
     }
+
+    // from https://stackoverflow.com/questions/849211/shortest-distance-between-a-point-and-a-line-segment
+    fn minimum_distance(v: Point, w: Point, p: Point) -> f32 {
+        // Return minimum distance between line segment vw and point p
+        let l2 = (v-w).length().powi(2);  // i.e. |w-v|^2 -  avoid a sqrt
+        if l2 == 0.0 { return (p - v).length(); }   // v == w case
+        // Consider the line extending the segment, parameterized as v + t (w - v).
+        // We find projection of point p onto the line.
+        // It falls where t = [(p-v) . (w-v)] / |w-v|^2
+        // We clamp t from [0,1] to handle points outside the segment vw.
+        let t = 0_f32.max(1_f32.min(dot(p - v, w - v) / l2));
+        let projection = v + (w - v) * t;  // Projection falls on the segment
+        (p - projection).length()
+    }
+
+    let mut stroker = Stroker::new(&StrokeStyle{
+        cap: LineCap::Square,
+        join: LineJoin::Miter,
+        width: 40.0,
+        miter_limit: 10.0,
+        ..Default::default()});
+    let start = Point::new(689.3504, 434.5446);
+    let end = Point::new(671.83203, 422.61914);
+    stroker.move_to(Point::new(689.3504, 434.5446), false);
+    stroker.line_to(Point::new(681.04254, 428.8891));
+    stroker.line_to_capped(Point::new(671.83203, 422.61914));
+
+    let result = stroker.finish();
+    let max_distance = (21_f32.powi(2) * 2.).sqrt();
+    for v in result.iter() {
+        assert!(minimum_distance(start, end, Point::new(v.x, v.y)) <= max_distance);
+    }
+
 }
 
