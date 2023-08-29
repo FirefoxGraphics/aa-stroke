@@ -68,7 +68,7 @@ pub extern "C" fn aa_stroke_finish(s: &mut Stroker) -> VertexBuffer {
             len: output_buffer_size,
         }
     } else {
-        let mut result = s.finish();
+        let result = s.finish();
         let len = result.len();
         let vb = VertexBuffer { data: Box::leak(result).as_ptr(), len };
         vb
