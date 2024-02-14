@@ -913,7 +913,7 @@ pub fn filled_circle(center: Point, radius: f32) -> Box<[Vertex]> {
 }
 
 #[test]
-fn fill_circle_test() {
+fn filled_circle_test() {
     let center = Point::new(100., 100.);
     let radius = 33.;
     let result = filled_circle(center, radius);
