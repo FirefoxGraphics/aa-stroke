@@ -904,11 +904,15 @@ impl<'z> Stroker<'z> {
     }
 }
 
+fn filled_circle_with_path_builder(mut path_builder: &mut PathBuilder, center: Point, radius: f32) {
+    arc(&mut path_builder, center.x, center.y, radius, Vector::new(1., 0.), Vector::new(-1., 0.));
+    arc(&mut path_builder, center.x, center.y, radius, Vector::new(-1., 0.), Vector::new(1., 0.));
+}
+
 /// Returns an anti-aliased triangle mesh for a filled circle.
 pub fn filled_circle(center: Point, radius: f32) -> Box<[Vertex]> {
     let mut path_builder = PathBuilder::new(1.);
-    arc(&mut path_builder, center.x, center.y, radius, Vector::new(1., 0.), Vector::new(-1., 0.));
-    arc(&mut path_builder, center.x, center.y, radius, Vector::new(-1., 0.), Vector::new(1., 0.));
+    filled_circle_with_path_builder(&mut path_builder, center, radius);
     path_builder.finish()
 }
 
