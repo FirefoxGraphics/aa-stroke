@@ -155,7 +155,6 @@ fn rast_triangle(buffer: &mut [u8], width: usize, height: usize, tri: &Triangle)
                 let bary = (cx1 as f32 / area, cx2 as f32 / area, cx3 as f32 / area);
                 let coverages = coverage1 * bary.0 + coverage2 * bary.1 + coverage3 * bary.2;
                 let color = (coverages * 255. + 0.5) as u8;
-
                 buffer[x as usize] = color;
             }
 
