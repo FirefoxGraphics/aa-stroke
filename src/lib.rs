@@ -951,11 +951,16 @@ impl<'z> Stroker<'z> {
             GpPointR { x: cx1.x, y: cx1.y, },
             GpPointR { x: cx2.x, y: cx2.y, },
             GpPointR { x: pt.x, y: pt.y, }]);
+
         let mut t = Target{ stroker: self, _end: end,
             last_normal: Vector::new(0., 0.),
             last_point: GpPointR { x: cur_pt.x, y: cur_pt.y }
         };
         let mut f = CBezierFlattener::new(&bezier, &mut t, 0.25);
+        if f.GetFirstTangent().is_none() {
+            // the bezier is degnerate
+            return if end { self.line_to_capped(pt) } else { self.line_to(pt) };
+        }
         f.Flatten(true);
 
         self.last_normal = t.last_normal;
@@ -1237,3 +1242,16 @@ fn degenerate_miter_join() {
 
 }
 
+
+#[test]
+fn nearly_degenerate_bezier() {
+    let mut stroker = Stroker::new(&StrokeStyle{
+        cap: LineCap::Square,
+        join: LineJoin::Miter,
+        width: 1.0,
+        ..Default::default()});
+
+    stroker.move_to(Point::new(0., 0.0005), false);
+    stroker.curve_to(Point::new(0., 0.0005), Point::new(0., 0.), Point::new(0., 0.));
+    stroker.finish();
+}
