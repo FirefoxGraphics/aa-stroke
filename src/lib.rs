@@ -880,7 +880,7 @@ impl<'z> Stroker<'z> {
     // This lets us make sure that the normal of the stroked path matches the normal
     // of the curve and we also avoid having to join the segments
     pub fn curve_to_direct(&mut self, cx1: Point, cx2: Point, pt: Point, end: bool) {
-        struct Target<'a, 'b> { stroker: &'a mut Stroker<'b>, _end: bool, last_normal: Vector, last_point: GpPointR}
+        struct Target<'a, 'b> { stroker: &'a mut Stroker<'b>, last_normal: Vector, last_point: GpPointR}
         impl<'a, 'b> CFlatteningSink for Target<'a, 'b> {
             fn FirstTangent(&mut self, tangent: Option<GpPointR>) {
                 let tangent = tangent.unwrap();
@@ -971,7 +971,7 @@ impl<'z> Stroker<'z> {
             GpPointR { x: cx2.x, y: cx2.y, },
             GpPointR { x: pt.x, y: pt.y, }]);
 
-        let mut t = Target{ stroker: self, _end: end,
+        let mut t = Target{ stroker: self,
             last_normal: Vector::new(0., 0.),
             last_point: GpPointR { x: cur_pt.x, y: cur_pt.y }
         };
