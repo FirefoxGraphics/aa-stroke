@@ -984,6 +984,17 @@ impl<'z> Stroker<'z> {
 
         self.last_normal = t.last_normal;
         self.cur_pt = Some(pt);
+
+        if end {
+            // cap end
+            let mut pt = pt;
+            if self.stroked_path.aa && self.style.cap == LineCap::Butt {
+                // pull the cap back half a pixel to match the start cap and line_to_capped
+                pt += perp(self.last_normal) * 0.5;
+            }
+            cap_line(&mut self.stroked_path, &self.style, pt, self.last_normal);
+            self.start_point = None;
+        }
     }
 
     pub fn close(&mut self) {
@@ -1310,4 +1321,40 @@ fn round_cap_points() {
     stroker.move_to(Point::new(92.0625, 57.5), false);
     stroker.line_to_capped(Point::new(92.0625, 57.5));
     assert_eq!(stroker.finish().len(), 576);
+}
+
+#[test]
+fn capped_curve_followed_by_subpath() {
+    // from https://bugzilla.mozilla.org/show_bug.cgi?id=2084919
+    // A sub-path ending with a curve should be capped even when another sub-path follows.
+    let mut stroker = Stroker::new(&StrokeStyle{
+        cap: LineCap::Round,
+        join: LineJoin::Round,
+        width: 20.,
+        ..Default::default()});
+    stroker.move_to(Point::new(20., 30.), false);
+    stroker.curve_to_capped(Point::new(30., 30.), Point::new(40., 30.), Point::new(50., 30.));
+    stroker.move_to(Point::new(20., 70.), false);
+    stroker.line_to_capped(Point::new(50., 70.));
+    let result = rasterize_to_mask(&stroker.finish(), 100, 100);
+    // inside the round cap at the end of the curve
+    assert_eq!(result[30 * 100 + 57], 255);
+}
+
+#[test]
+fn capped_curve_butt_cap() {
+    // the butt cap at the end of a curve shouldn't extend past the end point
+    let mut stroker = Stroker::new(&StrokeStyle{
+        cap: LineCap::Butt,
+        join: LineJoin::Bevel,
+        width: 1.,
+        ..Default::default()});
+    stroker.move_to(Point::new(20., 20.5), false);
+    stroker.curve_to_capped(Point::new(25., 20.5), Point::new(35., 20.5), Point::new(40., 20.5));
+    stroker.move_to(Point::new(20., 30.5), false);
+    stroker.line_to_capped(Point::new(40., 30.5));
+    let result = stroker.finish();
+    for v in result.iter() {
+        assert!(v.x >= 19.5 && v.x <= 40.5);
+    }
 }
