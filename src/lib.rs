@@ -579,6 +579,14 @@ fn is_interior_angle(a: Vector, b: Vector) -> bool {
     dot(perp(a), b) > 0. || a == b /* 0 degrees is interior */
 }
 
+fn join_round(dest: &mut PathBuilder, pt: Point, radius: f32, s1_normal: Vector, s2_normal: Vector) {
+    if is_interior_angle(s1_normal, s2_normal) {
+        dest.arc_wedge(pt, radius, flip(s2_normal), flip(s1_normal));
+    } else {
+        dest.arc_wedge(pt, radius, s1_normal, s2_normal);
+    }
+}
+
 fn join_line(
     dest: &mut PathBuilder,
     style: &StrokeStyle,
@@ -880,7 +888,10 @@ impl<'z> Stroker<'z> {
     // This lets us make sure that the normal of the stroked path matches the normal
     // of the curve and we also avoid having to join the segments
     pub fn curve_to_direct(&mut self, cx1: Point, cx2: Point, pt: Point, end: bool) {
-        struct Target<'a, 'b> { stroker: &'a mut Stroker<'b>, _end: bool, last_normal: Vector, last_point: GpPointR}
+        const TOLERANCE: f32 = 0.25;
+        // how far the outer edge of a trapezoid may fall inside the offset curve
+        const MAX_OFFSET_ERROR: f32 = 0.5;
+        struct Target<'a, 'b> { stroker: &'a mut Stroker<'b>, last_normal: Vector, last_point: GpPointR, min_turn_cos: f32 }
         impl<'a, 'b> CFlatteningSink for Target<'a, 'b> {
             fn FirstTangent(&mut self, tangent: Option<GpPointR>) {
                 let tangent = tangent.unwrap();
@@ -895,6 +906,7 @@ impl<'z> Stroker<'z> {
             }
             fn AcceptPointAndTangent(&mut self, pt: &GpPointR, tangent: &GpPointR, _last: bool) -> HRESULT {
                 let normal = flip(Vector::new(tangent.y, -tangent.x).normalize());
+                let curve_normal = normal;
                 let last_normal = self.last_normal;
                 let cur_pt = Point::new(self.last_point.x, self.last_point.y);
                 let half_width = self.stroker.half_width;
@@ -916,6 +928,24 @@ impl<'z> Stroker<'z> {
                 } else {
                     // we don't need to join the segments because the quads are sharing normals
                 }
+
+                // The trapezoid's outer edge is a chord of the offset curve. If the normal turns
+                // too much the chord falls too far inside the offset curve (and the inner edge
+                // can cross itself), so draw the segment as a rectangle with round joins at
+                // either end instead. The swept stroke of a curve is always round, regardless
+                // of the join style.
+                let mut start_normal = last_normal;
+                let mut end_normal = normal;
+                if dot(last_normal, normal) < self.min_turn_cos {
+                    let pt = Point::new(pt.x, pt.y);
+                    let seg_normal = compute_normal(cur_pt, pt).unwrap_or(normal);
+                    join_round(stroked_path, cur_pt, half_width, last_normal, seg_normal);
+                    join_round(stroked_path, pt, half_width, seg_normal, normal);
+                    start_normal = seg_normal;
+                    end_normal = seg_normal;
+                }
+                let (last_normal, normal) = (start_normal, end_normal);
+
                 if stroked_path.aa {
                     stroked_path.ramp(
                         pt.x + normal.x * (half_width - 0.5),
@@ -955,7 +985,7 @@ impl<'z> Stroker<'z> {
                         cur_pt.y - last_normal.y * half_width,
                     );
                 }
-                self.last_normal = normal;
+                self.last_normal = curve_normal;
                 self.last_point = *pt;
                 return S_OK;
             }
@@ -971,11 +1001,23 @@ impl<'z> Stroker<'z> {
             GpPointR { x: cx2.x, y: cx2.y, },
             GpPointR { x: pt.x, y: pt.y, }]);
 
-        let mut t = Target{ stroker: self, _end: end,
-            last_normal: Vector::new(0., 0.),
-            last_point: GpPointR { x: cur_pt.x, y: cur_pt.y }
+        // The chord of a turn of angle a on the offset curve falls half_width * (1 - cos(a / 2))
+        // inside it. Find the cosine of the turn where that reaches MAX_OFFSET_ERROR, using
+        // cos(a) = 2 * cos(a / 2)^2 - 1, so that each segment only needs a dot product.
+        let max_half_turn_cos = 1. - MAX_OFFSET_ERROR / self.half_width;
+        let min_turn_cos = if max_half_turn_cos > 0. {
+            2. * max_half_turn_cos * max_half_turn_cos - 1.
+        } else {
+            // the stroke is too thin for the chord to ever be off by MAX_OFFSET_ERROR
+            f32::NEG_INFINITY
         };
-        let mut f = CBezierFlattener::new(&bezier, &mut t, 0.25);
+
+        let mut t = Target{ stroker: self,
+            last_normal: Vector::new(0., 0.),
+            last_point: GpPointR { x: cur_pt.x, y: cur_pt.y },
+            min_turn_cos,
+        };
+        let mut f = CBezierFlattener::new(&bezier, &mut t, TOLERANCE);
         if f.GetFirstTangent().is_none() {
             // the bezier is degnerate
             return if end { self.line_to_capped(pt) } else { self.line_to(pt) };
@@ -984,6 +1026,17 @@ impl<'z> Stroker<'z> {
 
         self.last_normal = t.last_normal;
         self.cur_pt = Some(pt);
+
+        if end {
+            // cap end
+            let mut pt = pt;
+            if self.stroked_path.aa && self.style.cap == LineCap::Butt {
+                // pull the cap back half a pixel to match the start cap and line_to_capped
+                pt += perp(self.last_normal) * 0.5;
+            }
+            cap_line(&mut self.stroked_path, &self.style, pt, self.last_normal);
+            self.start_point = None;
+        }
     }
 
     pub fn close(&mut self) {
@@ -1310,4 +1363,74 @@ fn round_cap_points() {
     stroker.move_to(Point::new(92.0625, 57.5), false);
     stroker.line_to_capped(Point::new(92.0625, 57.5));
     assert_eq!(stroker.finish().len(), 576);
+}
+
+#[test]
+fn capped_curve_followed_by_subpath() {
+    // from https://bugzilla.mozilla.org/show_bug.cgi?id=2084919
+    // A sub-path ending with a curve should be capped even when another sub-path follows.
+    let mut stroker = Stroker::new(&StrokeStyle{
+        cap: LineCap::Round,
+        join: LineJoin::Round,
+        width: 20.,
+        ..Default::default()});
+    stroker.move_to(Point::new(20., 30.), false);
+    stroker.curve_to_capped(Point::new(30., 30.), Point::new(40., 30.), Point::new(50., 30.));
+    stroker.move_to(Point::new(20., 70.), false);
+    stroker.line_to_capped(Point::new(50., 70.));
+    let result = rasterize_to_mask(&stroker.finish(), 100, 100);
+    // inside the round cap at the end of the curve
+    assert_eq!(result[30 * 100 + 57], 255);
+}
+
+#[test]
+fn capped_curve_butt_cap() {
+    // the butt cap at the end of a curve shouldn't extend past the end point
+    let mut stroker = Stroker::new(&StrokeStyle{
+        cap: LineCap::Butt,
+        join: LineJoin::Bevel,
+        width: 1.,
+        ..Default::default()});
+    stroker.move_to(Point::new(20., 20.5), false);
+    stroker.curve_to_capped(Point::new(25., 20.5), Point::new(35., 20.5), Point::new(40., 20.5));
+    stroker.move_to(Point::new(20., 30.5), false);
+    stroker.line_to_capped(Point::new(40., 30.5));
+    let result = stroker.finish();
+    for v in result.iter() {
+        assert!(v.x >= 19.5 && v.x <= 40.5);
+    }
+}
+
+#[test]
+fn curve_turning_back_on_itself() {
+    // from https://bugzilla.mozilla.org/show_bug.cgi?id=2084919
+    // The outside of a sharp turn within a curve should be covered by a round join.
+    let mut stroker = Stroker::new(&StrokeStyle{
+        cap: LineCap::Round,
+        join: LineJoin::Round,
+        width: 20.,
+        ..Default::default()});
+    stroker.move_to(Point::new(50., 90.), false);
+    stroker.line_to(Point::new(50., 40.));
+    stroker.curve_to(Point::new(50., 38.), Point::new(49.8, 38.15), Point::new(49.5, 40.5));
+    stroker.line_to_capped(Point::new(49.5, 90.));
+    let result = rasterize_to_mask(&stroker.finish(), 100, 100);
+    // just above the turn, well within half the line width of the curve
+    assert_eq!(result[33 * 100 + 50], 255);
+}
+
+#[test]
+fn curve_turning_back_on_itself_bevel() {
+    // The outside of a sharp turn within a curve should be round even with bevel joins
+    let mut stroker = Stroker::new(&StrokeStyle{
+        cap: LineCap::Round,
+        join: LineJoin::Bevel,
+        width: 20.,
+        ..Default::default()});
+    stroker.move_to(Point::new(50., 90.), false);
+    stroker.line_to(Point::new(50., 40.));
+    stroker.curve_to(Point::new(50., 38.), Point::new(49.8, 38.15), Point::new(49.5, 40.5));
+    stroker.line_to_capped(Point::new(49.5, 90.));
+    let result = rasterize_to_mask(&stroker.finish(), 100, 100);
+    assert_eq!(result[33 * 100 + 50], 255);
 }
